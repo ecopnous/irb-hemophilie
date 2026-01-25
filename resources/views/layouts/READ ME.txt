@@ -1,0 +1,2 @@
+Un layout (ou modèle) est un fichier Blade qui sert de structure principale pour tes pages.
+Il permet d’éviter de répéter le même code (header, footer, CSS, menus…).
