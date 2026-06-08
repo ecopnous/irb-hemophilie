@@ -21,6 +21,7 @@ class DossierPatient extends Model
     use ScopesByHopital;
 
     protected $fillable = [
+        'nin',
         'photo',
         'nom',
         'postnom',
@@ -142,11 +143,16 @@ class DossierPatient extends Model
     protected static function booted()
     {
         static::creating(function ($patient) {
-            $latest = self::latest()->first();
-            $number = $latest ? $latest->id + 1 : 1;
+            if (empty($patient->nin)) {
+                $latest = self::latest()->first();
+                $number = $latest ? $latest->id + 1 : 1;
 
-            $patient->nin = 'NIN-' . date('y') . $patient->genre . "-" . str_pad($number, 5, '0', STR_PAD_LEFT) . "";
-            $patient->user_id = Auth::id();
+                $patient->nin = 'NIN-' . date('y') . $patient->genre . '-' . str_pad((string) $number, 5, '0', STR_PAD_LEFT);
+            }
+
+            if (empty($patient->user_id)) {
+                $patient->user_id = Auth::id();
+            }
         });
     }
 

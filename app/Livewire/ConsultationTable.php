@@ -65,6 +65,7 @@ final class ConsultationTable extends PowerGridComponent
             ->add('type_fichier', fn($consultation) => ucfirst($consultation->type_fichier ?? '-'))
             ->add('temperature', fn($consultation) => $consultation->temperature === null ? '-' : $consultation->temperature . '°C')
             ->add('poids', fn($consultation) => $consultation->poids === null ? '-' : $consultation->poids . ' kg')
+            ->add('pression_arterielle', fn($consultation) => (!$consultation->systolite ? '-' : $consultation->systolite) . ' / ' . (!$consultation->diastolique ? '-' : $consultation->diastolique) . ' mmHg')
             ->add('reference', function ($consultation) {
                 return Blade::render('<div class="space-y-1">
                         @if($consultation->is_visite_program)
@@ -179,6 +180,11 @@ final class ConsultationTable extends PowerGridComponent
                 ->sortable(),
 
             Column::make('Poids', 'poids')
+                ->visibleInExport(false)
+                ->bodyAttribute('text-xs')
+                ->sortable(),
+
+            Column::make('PA', 'pression_arterielle')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
                 ->sortable(),

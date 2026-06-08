@@ -20,9 +20,17 @@ new class extends Component {
         </div>
 
         <div class="flex items-center gap-3">
-            <flux:button variant="primary" icon="folder-open" color="indigo">Nouveau dossier</flux:button>
+            <livewire:patient-import-manager />
+            <flux:button
+                variant="primary"
+                icon="folder-open"
+                color="indigo"
+                :href="route('patient.create')"
+                wire:navigate
+            >
+                Nouveau dossier
+            </flux:button>
         </div>
     </div>
-
     <livewire:patient-table />
 </div>

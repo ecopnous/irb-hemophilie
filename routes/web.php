@@ -6,6 +6,8 @@ use App\Http\Controllers\ImagerieBonPdfController;
 use App\Http\Controllers\InventoryReportPdfController;
 use App\Http\Controllers\LaboratoireBonPdfController;
 use App\Http\Controllers\PatientDossierPdfController;
+use App\Http\Controllers\ConsultationImportController;
+use App\Http\Controllers\PatientImportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('patient')->name('patient.')->group(function () {
         Route::livewire('/', 'pages::patient.index')->name('index');
         Route::livewire('/create', 'pages::patient.create')->name('create');
+        Route::get('/import/template', [PatientImportController::class, 'template'])->name('import.template');
+        Route::get('/import/{patientImport}/errors', [PatientImportController::class, 'errors'])->name('import.errors');
         Route::get('/profil/{id}/print', PatientDossierPdfController::class)->name('print');
         Route::livewire('/profil/{id}', 'pages::patient.profil.profil')->name('show');
         Route::livewire('/profil/{id}/new', 'pages::patient.profil.initialisation')->name('init_consult');
@@ -45,6 +49,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('consultation')->name('consultation.')->group(function () {
         Route::livewire('/', 'pages::consultation.index')->name('index');
+        Route::get('/import/template', [ConsultationImportController::class, 'template'])->name('import.template');
+        Route::get('/import/{consultationImport}/errors', [ConsultationImportController::class, 'errors'])->name('import.errors');
         Route::livewire('/show/{id}', 'pages::consultation.show')->name('show');
         Route::livewire('/triage', 'pages::consultation.triage')->name('triage');
         Route::livewire('/prelevement/{id}', 'pages::consultation.prelevement')->name('prelevement');
