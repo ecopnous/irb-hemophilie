@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Models\Configs\Acte;
+use App\Models\liaison\Image;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Laboratoire extends Model
 {
@@ -47,5 +49,10 @@ class Laboratoire extends Model
     public function userPreleveur()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(Image::class);
     }
 }

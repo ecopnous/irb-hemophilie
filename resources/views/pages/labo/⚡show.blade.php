@@ -1,14 +1,19 @@
 <?php
 
 use App\Models\Laboratoire;
+use App\Models\liaison\Image;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new class extends Component {
+    use WithFileUploads;
+
     public Laboratoire $labo;
     public bool $showPrelevementModal = false;
     public bool $showValidationModal = false;
@@ -23,6 +28,7 @@ new class extends Component {
     public ?string $notes = '';
     public ?string $antibiotiques = '';
     public ?string $renseignement = '';
+    public $labPhotos = [];
 
     public function mount(int $id): void
     {
@@ -189,6 +195,77 @@ new class extends Component {
                 ],
             )
             ->all();
+    }
+
+    public function getLabImagesProperty()
+    {
+        return Image::query()
+            ->where(function ($query) {
+                $query->where('laboratoire_id', $this->labo->id)
+                    ->orWhere('path', 'like', 'laboratoire/' . $this->labo->id . '/%');
+            })
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (Image $image) => (object) [
+                'id' => $image->id,
+                'name' => $image->name,
+                'path' => $image->path,
+                'url' => $image->url(),
+                'created_at' => $image->created_at,
+            ]);
+    }
+
+    public function uploadLabPhotos(): void
+    {
+        if (! is_array($this->labPhotos)) {
+            $this->labPhotos = array_filter([$this->labPhotos]);
+        }
+
+        $this->validate(
+            [
+                'labPhotos' => ['required', 'array', 'min:1'],
+                'labPhotos.*' => ['image', 'max:5120'],
+            ],
+            [
+                'labPhotos.required' => 'Veuillez selectionner au moins une photo.',
+                'labPhotos.min' => 'Veuillez selectionner au moins une photo.',
+                'labPhotos.*.image' => 'Chaque fichier doit etre une image valide.',
+                'labPhotos.*.max' => 'Chaque photo ne doit pas depasser 5 Mo.',
+            ],
+        );
+
+        $uploadedCount = count($this->labPhotos);
+
+        foreach ($this->labPhotos as $photo) {
+            $path = $photo->storePublicly('laboratoire/' . $this->labo->id, 'public');
+
+            Image::query()->create([
+                'name' => $photo->getClientOriginalName(),
+                'path' => $path,
+                'laboratoire_id' => $this->labo->id,
+            ]);
+        }
+
+        $this->reset('labPhotos');
+        $this->successMessage = $uploadedCount > 1
+            ? $uploadedCount . ' photos ajoutees au bon de laboratoire.'
+            : 'Photo ajoutee au bon de laboratoire.';
+    }
+
+    public function deleteLabPhoto(int $imageId): void
+    {
+        $image = Image::query()
+            ->whereKey($imageId)
+            ->where(function ($query) {
+                $query->where('laboratoire_id', $this->labo->id)
+                    ->orWhere('path', 'like', 'laboratoire/' . $this->labo->id . '/%');
+            })
+            ->firstOrFail();
+
+        Storage::disk('public')->delete($image->path);
+        $image->delete();
+
+        $this->successMessage = 'Photo supprimee.';
     }
 
     public function resetResultInputs(): void
@@ -489,6 +566,62 @@ new class extends Component {
                             wire:loading.class="opacity-50 cursor-not-allowed" wire:target="saveDraft" />
                     </div>
                 </x-slot:footer>
+            </x-card>
+
+            <x-card shadow="sm" header="Photos du bon de laboratoire"
+                class="border-none ring-1 ring-slate-200 dark:ring-slate-800">
+                <div class="space-y-5">
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        Ajoutez des photos liees a ce bon (resultats, prelevements, documents scannes, etc.).
+                    </p>
+
+                    <x-upload label="Photos" accept="image/*" wire:model="labPhotos" multiple delete
+                        hint="JPG, PNG, WEBP — max 5 Mo par photo" />
+
+                    @error('labPhotos')
+                        <p class="text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                    @error('labPhotos.*')
+                        <p class="text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+
+                    <div class="flex justify-end">
+                        <x-button icon="photo" text="Envoyer les photos" color="primary"
+                            wire:click="uploadLabPhotos" wire:loading.attr="disabled"
+                            wire:target="uploadLabPhotos,labPhotos" />
+                    </div>
+
+                    @if ($this->labImages->isNotEmpty())
+                        <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                            @foreach ($this->labImages as $image)
+                                <div
+                                    class="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+                                    <a href="{{ $image->url }}" target="_blank" rel="noopener">
+                                        <img src="{{ $image->url }}" alt="{{ $image->name }}"
+                                            class="aspect-square w-full object-cover transition group-hover:scale-[1.02]" />
+                                    </a>
+                                    <div class="space-y-2 p-3">
+                                        <p class="truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
+                                            title="{{ $image->name }}">
+                                            {{ $image->name }}
+                                        </p>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                            {{ $image->created_at?->format('d/m/Y H:i') }}
+                                        </p>
+                                        <x-button flat text="Supprimer" color="rose" size="sm"
+                                            wire:click="deleteLabPhoto({{ $image->id }})"
+                                            wire:confirm="Supprimer cette photo ?" />
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <p
+                            class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                            Aucune photo soumise pour ce bon.
+                        </p>
+                    @endif
+                </div>
             </x-card>
 
             <x-card shadow="sm" header="Contexte du laboratoire"

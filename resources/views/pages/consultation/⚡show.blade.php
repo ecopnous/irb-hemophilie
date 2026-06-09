@@ -50,7 +50,7 @@ new #[Title('Fiche de consultation')] class extends Component {
     public function loadConsultation(int $id): void
     {
         $this->consultation = Consultation::query()
-            ->with(['dossierPatient', 'departement', 'service', 'user', 'assurance', 'projet', 'laboratoire', 'imagerie', 'prescription.medicaments', 'actes.departement', 'actes.service', 'consultationSource', 'symptomeItems'])
+            ->with(['dossierPatient', 'departement', 'service', 'user', 'assurance', 'projet', 'laboratoire.images', 'imagerie', 'prescription.medicaments', 'actes.departement', 'actes.service', 'consultationSource', 'symptomeItems'])
             ->findOrFail($id);
 
         $this->syncIssueForm();
@@ -841,6 +841,19 @@ new #[Title('Fiche de consultation')] class extends Component {
         return $this->consultation->actes->filter(fn($acte) => $this->acteBelongsToSection($acte, 'laboratoire'))->values();
     }
 
+    public function laboratoireImages(): Collection
+    {
+        $laboratoire = $this->consultation->laboratoire;
+
+        if (! $laboratoire) {
+            return collect();
+        }
+
+        return $laboratoire->images
+            ->sortByDesc('created_at')
+            ->values();
+    }
+
     public function imagerieActes()
     {
         return $this->consultation->actes->filter(fn($acte) => $this->acteBelongsToSection($acte, 'imagerie'))->values();
@@ -1391,6 +1404,55 @@ new #[Title('Fiche de consultation')] class extends Component {
                                 </table>
                             </div>
                         </div>
+
+                        @if ($this->consultation->laboratoire)
+                            <div>
+                                <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Photos du bon de
+                                        laboratoire</p>
+                                    <div class="flex items-center gap-2">
+                                        <span
+                                            class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                            {{ $this->laboratoireImages()->count() }}
+                                        </span>
+                                        <a href="{{ route('laboratoire.show', $this->consultation->laboratoire->id) }}"
+                                            wire:navigate
+                                            class="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">
+                                            <flux:icon.photo class="size-4" />
+                                            Gerer les photos
+                                        </a>
+                                    </div>
+                                </div>
+
+                                @if ($this->laboratoireImages()->isNotEmpty())
+                                    <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                                        @foreach ($this->laboratoireImages() as $image)
+                                            <div wire:key="labo-photo-{{ $image->id }}"
+                                                class="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+                                                <a href="{{ $image->url() }}" target="_blank" rel="noopener">
+                                                    <img src="{{ $image->url() }}" alt="{{ $image->name }}"
+                                                        class="aspect-square w-full object-cover transition group-hover:scale-[1.02]" />
+                                                </a>
+                                                <div class="space-y-1 p-3">
+                                                    <p class="truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
+                                                        title="{{ $image->name }}">
+                                                        {{ $image->name }}
+                                                    </p>
+                                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                                        {{ $image->created_at?->format('d/m/Y H:i') }}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <p
+                                        class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                        Aucune photo soumise pour ce bon de laboratoire.
+                                    </p>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 </section>
 

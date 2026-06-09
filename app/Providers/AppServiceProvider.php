@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -25,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->ensurePublicStorageLink();
         $this->configureDefaults();
         TallStackUi::customize()
             ->table()
@@ -42,6 +44,21 @@ class AppServiceProvider extends ServiceProvider
         TallStackUi::customize()
             ->card()
             ->block('header.wrapper.base', 'flex items-center justify-between px-4 py-2');
+    }
+
+    protected function ensurePublicStorageLink(): void
+    {
+        $link = public_path('storage');
+
+        if (is_link($link) || is_dir($link)) {
+            return;
+        }
+
+        try {
+            Artisan::call('storage:link');
+        } catch (\Throwable) {
+            //
+        }
     }
 
     /**

@@ -119,4 +119,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
+Route::get('/storage/{path}', function (string $path) {
+    abort_unless(\Illuminate\Support\Facades\Storage::disk('public')->exists($path), 404);
+
+    return \Illuminate\Support\Facades\Storage::disk('public')->response($path);
+})->where('path', '.*')->name('storage.public');
+
 require __DIR__ . '/settings.php';

@@ -16,6 +16,8 @@
             <flux:sidebar.item icon="building-office-2" href="{{ route('facturation.inventory') }}" wire:navigate>Inventaire
                 des equipements
             </flux:sidebar.item>
+            <flux:sidebar.item icon="groupe d'utilisateurs" href="{{ route('facturation.inventory') }}" wire:navigate>Clients
+            </flux:sidebar.item>
         </flux:sidebar.nav>
     </x-slot>
     <flux:main class="p-0 bg-[#f3f4f6] dark:bg-gray-950">
