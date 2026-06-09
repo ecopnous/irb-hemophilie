@@ -63,7 +63,7 @@
         <flux:brand href="#" logo="{{ asset('assets/dart-logo.png') }}" class="hidden max-lg:hidden! dark:flex" />
 
         <flux:navbar class="-mb-px max-lg:hidden">
-            <flux:navbar.item icon="chart-column-big" href="#">Analytics</flux:navbar.item>
+            <flux:navbar.item icon="chart-column-big" href="{{ route('analytics') }}" :current="request()->routeIs('analytics')" wire:navigate>Analytics</flux:navbar.item>
             <flux:navbar.item icon="envelope" badge="12" href="#">Boite de reception</flux:navbar.item>
             <flux:navbar.item icon="document-text" href="#">Documents</flux:navbar.item>
         </flux:navbar>

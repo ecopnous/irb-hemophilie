@@ -30,6 +30,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public bool $use_project_period = true;
     public bool $new_visite = false;
     public $next_visit_date = null;
+    public ?string $next_visit_time = null;
     public string $ref = '';
     public $date_consultation;
 
@@ -38,12 +39,31 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         abort_unless(current_hopital_id(), 403, 'Aucun hopital courant en session.');
 
         $this->patient = DossierPatient::findOrFail($id);
+        $this->date_consultation = today()->format('Y-m-d');
         view()->share('current_patient', $id);
+    }
+
+    protected function resolvedConsultationDate(): \Carbon\CarbonInterface
+    {
+        $date = filled($this->date_consultation)
+            ? Carbon::parse($this->date_consultation)->startOfDay()
+            : today();
+
+        return $date->isToday() ? now() : $date->copy()->setTime(8, 0);
+    }
+
+    protected function resolvedNextVisitDateTime(): \Carbon\CarbonInterface
+    {
+        $date = Carbon::parse($this->next_visit_date)->startOfDay();
+        $time = filled($this->next_visit_time) ? $this->next_visit_time : '08:30';
+        [$hour, $minute] = array_pad(explode(':', $time), 2, '0');
+
+        return $date->copy()->setTime((int) $hour, (int) $minute);
     }
 
     public function updatedType($value): void
     {
-        $this->reset(['departement_id', 'service_id', 'acte_ids', 'user_ids', 'ref', 'depistage_target', 'pacquet_soin_id', 'use_project_period', 'new_visite', 'next_visit_date']);
+        $this->reset(['departement_id', 'service_id', 'acte_ids', 'user_ids', 'ref', 'depistage_target', 'pacquet_soin_id', 'use_project_period', 'new_visite', 'next_visit_date', 'next_visit_time']);
 
         if ($this->isDepistageType($value)) {
             $this->depistage_target = 'laboratoire';
@@ -343,20 +363,22 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $validated = $this->validate(
             [
                 'type' => 'required|in:consultation,depistage',
-                'type_fiche' => 'required|in:standard,hemophile,redac',
+                'type_fiche' => 'required|in:standard,hémophilie,drépanocytose',
                 'depistage_target' => $this->isDepistageType() ? 'required|in:laboratoire,imagerie,pacquet_soins' : 'nullable',
                 'departement_id' => $this->isConsultationType() ? 'required|exists:departements,id' : 'nullable',
                 'assurance_id' => 'nullable|exists:assurances,id',
                 'projet_id' => 'nullable|exists:projets,id',
                 'use_project_period' => 'boolean',
                 'new_visite' => 'boolean',
-                'next_visit_date' => $this->new_visite ? 'required|date' : 'nullable|date',
+                'next_visit_date' => $this->new_visite ? 'required|date|after_or_equal:today' : 'nullable|date',
+                'next_visit_time' => $this->new_visite ? 'nullable|date_format:H:i' : 'nullable|date_format:H:i',
                 'service_id' => 'nullable|exists:services,id',
                 'pacquet_soin_id' => $this->isDepistageType() && $this->depistage_target === 'pacquet_soins' ? 'required|exists:pacquet_soins,id' : 'nullable',
                 'acte_ids' => 'required|array|min:1',
                 'acte_ids.*' => 'exists:actes,id',
                 'user_ids' => 'nullable|array',
                 'user_ids.*' => 'exists:users,id',
+                'date_consultation' => 'nullable|date|before_or_equal:today',
             ],
             [
                 'acte_ids.required' => 'Veuillez selectionner au moins un acte.',
@@ -364,10 +386,25 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'depistage_target.required' => 'Veuillez choisir une cible pour le depistage.',
                 'pacquet_soin_id.required' => 'Veuillez selectionner un paquet de soins.',
                 'next_visit_date.required' => 'Veuillez renseigner la date de la consultation programmee.',
+                'next_visit_date.after_or_equal' => 'La date du rendez-vous ne peut pas etre dans le passe.',
+                'next_visit_time.date_format' => 'L\'heure du rendez-vous est invalide.',
+                'date_consultation.before_or_equal' => 'La date de consultation ne peut pas etre dans le futur.',
             ],
         );
 
-        $consultation = DB::transaction(function () use ($validated) {
+        if (($validated['new_visite'] ?? false) && filled($validated['next_visit_date'])) {
+            $nextVisitAt = $this->resolvedNextVisitDateTime();
+
+            if ($nextVisitAt->isPast()) {
+                $this->addError('next_visit_time', 'Le rendez-vous doit etre planifie dans le futur.');
+
+                return;
+            }
+        }
+
+        $consultationAt = $this->resolvedConsultationDate();
+
+        $consultation = DB::transaction(function () use ($validated, $consultationAt) {
             $selectedActes = Acte::query()->with('departement')->whereIn('id', $validated['acte_ids'])->get()->keyBy('id');
 
             $consultation = Consultation::createWithPeriodContext(
@@ -380,6 +417,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                     'assurance_id' => $validated['assurance_id'] ?? null,
                     'service_id' => $this->isConsultationType() ? $validated['service_id'] ?? null : null,
                     'hopital_id' => current_hopital_id(),
+                    'created_at' => $consultationAt,
+                    'updated_at' => $consultationAt,
                 ],
                 [
                     'use_project_period' => (bool) ($validated['use_project_period'] ?? false),
@@ -407,8 +446,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'consultation_id' => $consultation->id,
                 'dossier_patient_id' => $this->patient->id,
                 'hopital_id' => current_hopital_id(),
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => $consultationAt,
+                'updated_at' => $consultationAt,
             ]);
 
             $consultation->update([
@@ -443,6 +482,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             }
 
             if ($this->isConsultationType() && ($validated['new_visite'] ?? false) && filled($validated['next_visit_date'])) {
+                $nextVisitAt = $this->resolvedNextVisitDateTime();
+
                 $programmedConsultation = Consultation::createWithPeriodContext(
                     [
                         'type' => 'consultation',
@@ -455,8 +496,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                         'hopital_id' => current_hopital_id(),
                         'is_visite_program' => true,
                         'consultation_source_id' => $consultation->id,
-                        'created_at' => \Illuminate\Support\Carbon::parse($validated['next_visit_date']),
-                        'updated_at' => \Illuminate\Support\Carbon::parse($validated['next_visit_date']),
+                        'created_at' => $nextVisitAt,
+                        'updated_at' => $nextVisitAt,
                     ],
                     [
                         'use_project_period' => (bool) ($validated['use_project_period'] ?? false),
@@ -467,8 +508,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                     'consultation_id' => $programmedConsultation->id,
                     'dossier_patient_id' => $this->patient->id,
                     'hopital_id' => current_hopital_id(),
-                    'created_at' => \Illuminate\Support\Carbon::parse($validated['next_visit_date']),
-                    'updated_at' => \Illuminate\Support\Carbon::parse($validated['next_visit_date']),
+                    'created_at' => $nextVisitAt,
+                    'updated_at' => $nextVisitAt,
                 ]);
 
                 $programmedConsultation->update([
@@ -507,11 +548,11 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 <x-select.styled label="Type de la visite *" wire:model.live="type_fiche" placeholder="Choisir..."
                     required :options="[
                         ['label' => 'Standard', 'value' => 'standard'],
-                        ['label' => 'Hemophile', 'value' => 'hemophile'],
-                        ['label' => 'REDAC', 'value' => 'redac'],
+                        ['label' => 'drépanocytose', 'value' => 'hémophilie'],
+                        ['label' => 'drépanocytose', 'value' => 'drépanocytose'],
                     ]" />
                 <x-date label="Date de la consultation" wire:model="date_consultation"
-                    aria-placeholder="aujourd'hui..." />
+                    placeholder="Aujourd'hui par défaut" :max="today()->format('Y-m-d')" />
             </div>
         </x-card>
 
@@ -613,7 +654,12 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                             <flux:icon.loading wire:loading wire:target="new_visite" />
                             <div wire:loading.remove wire:target="new_visite">
                                 @if ($new_visite)
-                                    <x-date wire:model="next_visit_date" placeholder="Date de la prochaine visite" />
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <x-date wire:model="next_visit_date" label="Date du rendez-vous *"
+                                            placeholder="Date de la prochaine visite" :min="today()->format('Y-m-d')" />
+                                        <x-input wire:model="next_visit_time" type="time" label="Heure"
+                                            placeholder="08:30 par défaut" />
+                                    </div>
                                 @endif
                             </div>
                         </div>

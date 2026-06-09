@@ -6,6 +6,7 @@ use App\Http\Controllers\ImagerieBonPdfController;
 use App\Http\Controllers\InventoryReportPdfController;
 use App\Http\Controllers\LaboratoireBonPdfController;
 use App\Http\Controllers\PatientDossierPdfController;
+use App\Http\Controllers\AnalyticsExportController;
 use App\Http\Controllers\ConsultationImportController;
 use App\Http\Controllers\PatientImportController;
 use Illuminate\Http\Request;
@@ -15,6 +16,9 @@ Route::view('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('/dashboard', 'pages::dashboard')->name('dashboard');
+    Route::livewire('/analytics', 'pages::analytics')->name('analytics');
+    Route::get('/analytics/export/excel', [AnalyticsExportController::class, 'excel'])->name('analytics.export.excel');
+    Route::get('/analytics/export/pdf', [AnalyticsExportController::class, 'pdf'])->name('analytics.export.pdf');
 
     Route::get('heartbeat', function (Request $request) {
         $user = $request->user();
@@ -45,6 +49,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('/profil/{id}/new', 'pages::patient.profil.initialisation')->name('init_consult');
         Route::livewire('/profil/{id}/fiche-medicale', 'pages::patient.profil.fiche_medicale')->name('fiche_medicale');
         Route::livewire('/profil/{id}/boite-reception', 'pages::patient.profil.health_wallet')->name('inbox');
+        Route::livewire('/profil/{id}/evolution', 'pages::patient.profil.evolution')->name('evolution');
     });
 
     Route::prefix('consultation')->name('consultation.')->group(function () {

@@ -34,9 +34,9 @@ class DatabaseSeeder extends Seeder
             'password' => bcrypt('ecopnous'),
         ]);
 
-        $this->call([
-            DossierPatientSeeder::class,
-            ConsultationSeeder::class,
-        ]);
+        // $this->call([
+        //     DossierPatientSeeder::class,
+        //     ConsultationSeeder::class,
+        // ]);
     }
 }

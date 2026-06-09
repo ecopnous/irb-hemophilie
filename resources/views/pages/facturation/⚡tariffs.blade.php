@@ -74,10 +74,6 @@ new #[Title('Grille tarifaire'), Layout('layouts::app.other.facturation')] class
 <div class="space-y-5 p-6">
     <h1 class="text-2xl font-black text-slate-900 dark:text-white">Grille tarifaire des actes medicaux</h1>
 
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/70">
-        <livewire:tariff-table />
-    </div>
-
     @if($edit_id)
         <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
             <h2 class="mb-3 font-bold text-emerald-900 dark:text-emerald-100">Edition acte #{{ $edit_id }}</h2>
@@ -89,9 +85,11 @@ new #[Title('Grille tarifaire'), Layout('layouts::app.other.facturation')] class
                     ['label' => 'Actif', 'value' => true],
                     ['label' => 'Inactif', 'value' => false],
                 ]"
-                    select="label:label|value:value" />
+                    select="label:label|value:value" required />
             </div>
             <flux:button class="mt-3" wire:click="saveEdit" variant="primary">Sauvegarder</flux:button>
         </div>
     @endif
+    
+    <livewire:tariff-table />
 </div>

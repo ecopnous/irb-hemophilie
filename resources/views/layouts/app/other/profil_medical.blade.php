@@ -8,7 +8,8 @@
                 wire:navigate>
                 Fiche medicale
             </flux:sidebar.item>
-            <flux:sidebar.item icon="chart-column-big" href="#" wire:navigate>
+            <flux:sidebar.item icon="chart-column-big" href="{{ route('patient.evolution', $current_patient) }}"
+                :current="request()->routeIs('patient.evolution')" wire:navigate>
                 Evolution du patient
             </flux:sidebar.item>
             <flux:sidebar.item icon="envelope" href="{{ route('patient.inbox', $current_patient) }}" wire:navigate>
