@@ -1,8 +1,8 @@
 <x-layouts::app.sidebar :title="$title ?? null" :back="true">
     <x-slot:navigation>
         <flux:sidebar.nav>
-            <flux:sidebar.item icon="receipt" href="{{ route('facturation.index') }}" wire:navigate>Facturations
-                hospitalieres
+            <flux:sidebar.item icon="receipt" href="{{ route('facturation.index') }}" wire:navigate>Factures
+                clinique
             </flux:sidebar.item>
             <flux:sidebar.item icon="receipt-text" href="{{ route('facturation.documents') }}" wire:navigate>Factures et devis
             </flux:sidebar.item>
@@ -16,7 +16,7 @@
             <flux:sidebar.item icon="building-office-2" href="{{ route('facturation.inventory') }}" wire:navigate>Inventaire
                 des equipements
             </flux:sidebar.item>
-            <flux:sidebar.item icon="groupe d'utilisateurs" href="{{ route('facturation.inventory') }}" wire:navigate>Clients
+            <flux:sidebar.item icon="user-group" href="{{ route('facturation.clients') }}" wire:navigate>Clients
             </flux:sidebar.item>
         </flux:sidebar.nav>
     </x-slot>

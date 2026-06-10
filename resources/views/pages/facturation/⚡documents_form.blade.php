@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\Configs\Acte;
+use App\Models\facturation\FinanceClient;
 use App\Models\facturation\FinanceDocument;
+use App\Models\prescription\Medicament;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -15,7 +17,9 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
     public string $mode = 'create';
 
     public string $document_type = 'devis';
+    public string $beneficiary_type = 'patient';
     public ?int $dossier_patient_id = null;
+    public ?int $finance_client_id = null;
     public string $number = '';
     public string $issue_date = '';
     public int $validity_days = 15;
@@ -24,7 +28,10 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
     public string $currency = 'USD';
 
     public string $line_type = 'acte';
+    public ?int $acte_departement_id = null;
+    public ?int $acte_service_id = null;
     public ?int $selectedActeId = null;
+    public ?int $selectedMedicamentId = null;
     public ?string $designation = null;
     public float $quantity = 1;
     public float $price = 0;
@@ -32,6 +39,12 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
     public float $discount = 0;
 
     public array $items = [];
+
+    public bool $showQuickClientForm = false;
+    public string $quickClientName = '';
+    public string $quickClientPhone = '';
+    public string $quickClientEmail = '';
+    public string $quickClientType = 'particulier';
 
     public function mount(?int $id = null, ?string $type = null): void
     {
@@ -45,6 +58,12 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
         $this->document_type = in_array((string) $type, ['devis', 'facture'], true) ? (string) $type : 'devis';
         $this->status = $this->defaultStatusForType($this->document_type);
         $this->refreshNumber();
+
+        $clientId = request()->integer('client');
+        if ($clientId && FinanceClient::query()->where('hopital_id', current_hopital_id())->whereKey($clientId)->exists()) {
+            $this->beneficiary_type = 'client';
+            $this->finance_client_id = $clientId;
+        }
     }
 
     public function updatedDocumentType(): void
@@ -55,9 +74,44 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
         }
     }
 
+    public function updatedBeneficiaryType(): void
+    {
+        if ($this->beneficiary_type === 'patient') {
+            $this->finance_client_id = null;
+            $this->showQuickClientForm = false;
+        } else {
+            $this->dossier_patient_id = null;
+        }
+    }
+
+    public function updatedLineType(): void
+    {
+        $this->reset([
+            'acte_departement_id',
+            'acte_service_id',
+            'selectedActeId',
+            'selectedMedicamentId',
+            'designation',
+        ]);
+        $this->quantity = 1;
+        $this->price = 0;
+        $this->discount = 0;
+    }
+
+    public function updatedActeDepartementId(): void
+    {
+        $this->acte_service_id = null;
+        $this->selectedActeId = null;
+    }
+
+    public function updatedActeServiceId(): void
+    {
+        $this->selectedActeId = null;
+    }
+
     public function updatedSelectedActeId($value): void
     {
-        if ($this->line_type !== 'acte' || !$value) {
+        if ($this->line_type !== 'acte' || ! $value) {
             return;
         }
 
@@ -66,6 +120,74 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
             $this->designation = $acte->name;
             $this->price = (float) ($acte->base_price ?? $acte->montant ?? 0);
         }
+    }
+
+    public function updatedSelectedMedicamentId($value): void
+    {
+        if ($this->line_type !== 'produit' || ! $value) {
+            return;
+        }
+
+        $details = $this->resolveMedicamentDetails((int) $value);
+        if ($details) {
+            $this->designation = $details['designation'];
+            if ($details['price'] > 0) {
+                $this->price = $details['price'];
+            }
+        }
+    }
+
+    protected function resolveMedicamentDetails(int $medicamentId): ?array
+    {
+        $medicament = Medicament::query()
+            ->where('is_active', true)
+            ->whereHas('pharmacies', fn ($q) => $q->where('hopital_id', current_hopital_id()))
+            ->with(['pharmacies' => fn ($q) => $q->where('hopital_id', current_hopital_id())])
+            ->find($medicamentId);
+
+        if (! $medicament) {
+            return null;
+        }
+
+        $price = (float) ($medicament->pharmacies
+            ->first(fn ($pharmacy) => (float) $pharmacy->pivot->montant > 0)?->pivot->montant ?? 0);
+
+        $designation = $medicament->name;
+        if ($medicament->reference) {
+            $designation .= ' (' . $medicament->reference . ')';
+        }
+
+        return [
+            'designation' => $designation,
+            'price' => $price,
+        ];
+    }
+
+    public function createQuickClient(): void
+    {
+        $validated = $this->validate([
+            'quickClientName' => ['required', 'string', 'max:255'],
+            'quickClientPhone' => ['nullable', 'string', 'max:50'],
+            'quickClientEmail' => ['nullable', 'email', 'max:255'],
+            'quickClientType' => ['required', 'in:particulier,institution'],
+        ], [
+            'quickClientName.required' => 'Le nom du client est obligatoire.',
+        ]);
+
+        $client = FinanceClient::query()->create([
+            'hopital_id' => current_hopital_id(),
+            'name' => trim($validated['quickClientName']),
+            'type' => $validated['quickClientType'],
+            'phone' => $validated['quickClientPhone'] ?: null,
+            'email' => $validated['quickClientEmail'] ?: null,
+            'is_active' => true,
+        ]);
+
+        $this->finance_client_id = $client->id;
+        $this->beneficiary_type = 'client';
+        $this->showQuickClientForm = false;
+        $this->reset(['quickClientName', 'quickClientPhone', 'quickClientEmail']);
+        $this->quickClientType = 'particulier';
     }
 
     public function updatedItems($value, $key): void
@@ -111,32 +233,62 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
         ];
     }
 
-    #[Computed]
-    public function actes()
+    public function lineTypeLabel(string $type): string
     {
-        return Acte::query()->orderBy('name')->limit(300)->get();
+        return match ($type) {
+            'acte' => 'Acte',
+            'service' => 'Prestation',
+            'produit' => 'Produit',
+            'autre' => 'Autre',
+            default => ucfirst($type),
+        };
     }
 
     public function addItem(): void
     {
         $this->validate([
-            'line_type' => ['required', 'in:acte,service'],
-            'selectedActeId' => [$this->line_type === 'acte' ? 'required' : 'nullable', 'integer', 'exists:actes,id'],
-            'designation' => [$this->line_type === 'service' ? 'required' : 'nullable', 'string', 'max:255'],
-            'quantity' => ['required', 'numeric', 'min:1'],
+            'line_type' => ['required', 'in:acte,service,produit,autre'],
+            'selectedActeId' => ['required_if:line_type,acte', 'nullable', 'integer', 'exists:actes,id'],
+            'selectedMedicamentId' => ['required_if:line_type,produit', 'nullable', 'integer', 'exists:medicaments,id'],
+            'designation' => [
+                Rule::requiredIf(in_array($this->line_type, ['service', 'autre'], true)),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'quantity' => ['required', 'numeric', 'min:0.01'],
             'price' => ['required', 'numeric', 'min:0'],
             'tva' => ['required', 'numeric', 'min:0'],
             'discount' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ], [
+            'selectedActeId.required_if' => 'Veuillez selectionner un acte medical.',
+            'selectedMedicamentId.required_if' => 'Veuillez selectionner un medicament de la pharmacie.',
+            'designation.required' => 'Veuillez saisir une designation.',
         ]);
 
-        $designation = $this->designation;
-        if ($this->line_type === 'acte' && $this->selectedActeId) {
+        $designation = trim((string) $this->designation);
+        $acteId = null;
+        $medicamentId = null;
+
+        if ($this->line_type === 'acte') {
             $acte = Acte::query()->find($this->selectedActeId);
-            if (!$acte) {
+            if (! $acte) {
                 $this->addError('selectedActeId', 'Acte introuvable.');
                 return;
             }
+            $acteId = (int) $acte->id;
             $designation = $acte->name;
+        } elseif ($this->line_type === 'produit') {
+            $details = $this->resolveMedicamentDetails((int) $this->selectedMedicamentId);
+            if (! $details) {
+                $this->addError('selectedMedicamentId', 'Medicament introuvable dans la pharmacie.');
+                return;
+            }
+            $medicamentId = (int) $this->selectedMedicamentId;
+            $designation = $details['designation'];
+        } elseif ($designation === '') {
+            $this->addError('designation', 'Veuillez saisir une designation.');
+            return;
         }
 
         $baseHT = $this->quantity * $this->price;
@@ -145,7 +297,8 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
 
         $this->items[] = [
             'line_type' => $this->line_type,
-            'acte_id' => $this->line_type === 'acte' ? $this->selectedActeId : null,
+            'acte_id' => $acteId,
+            'medicament_id' => $medicamentId,
             'designation' => $designation,
             'quantity' => (float) $this->quantity,
             'price' => (float) $this->price,
@@ -155,7 +308,13 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
             'total_ttc' => round($totalTTC, 2),
         ];
 
-        $this->reset(['selectedActeId', 'designation']);
+        $this->reset([
+            'acte_departement_id',
+            'acte_service_id',
+            'selectedActeId',
+            'selectedMedicamentId',
+            'designation',
+        ]);
         $this->quantity = 1;
         $this->price = 0;
         $this->discount = 0;
@@ -174,13 +333,18 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
         $this->validate([
             'number' => ['required', 'string', 'max:255', Rule::unique('finance_documents', 'number')->ignore($this->documentId)],
             'document_type' => ['required', 'in:devis,facture'],
+            'beneficiary_type' => ['required', 'in:patient,client'],
+            'dossier_patient_id' => ['required_if:beneficiary_type,patient', 'nullable', 'integer', 'exists:dossier_patients,id'],
+            'finance_client_id' => ['required_if:beneficiary_type,client', 'nullable', 'integer', 'exists:finance_clients,id'],
             'status' => ['required', Rule::in($this->allowedStatusesForType($this->document_type))],
-            'dossier_patient_id' => ['nullable', 'integer', 'exists:dossier_patients,id'],
             'issue_date' => ['required', 'date'],
             'validity_days' => ['required', 'integer', 'min:1', 'max:365'],
             'currency' => ['required', 'string', 'size:3'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
+        ], [
+            'dossier_patient_id.required_if' => 'Veuillez selectionner un patient.',
+            'finance_client_id.required_if' => 'Veuillez selectionner ou creer un client.',
         ]);
 
         foreach (array_keys($this->items) as $index) {
@@ -192,7 +356,9 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
 
             $payload = [
                 'hopital_id' => current_hopital_id(),
-                'dossier_patient_id' => $this->dossier_patient_id ?: null,
+                'beneficiary_type' => $this->beneficiary_type,
+                'dossier_patient_id' => $this->beneficiary_type === 'patient' ? $this->dossier_patient_id : null,
+                'finance_client_id' => $this->beneficiary_type === 'client' ? $this->finance_client_id : null,
                 'document_type' => $this->document_type,
                 'status' => $this->status,
                 'number' => $this->number,
@@ -220,7 +386,8 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
             foreach ($this->items as $idx => $item) {
                 $doc->items()->create([
                     'line_type' => $item['line_type'],
-                    'acte_id' => $item['acte_id'],
+                    'acte_id' => $item['acte_id'] ?? null,
+                    'medicament_id' => $item['medicament_id'] ?? null,
                     'designation' => $item['designation'],
                     'quantity' => $item['quantity'],
                     'price_ht' => $item['price'],
@@ -242,7 +409,7 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
     public function loadDocument(int $id): void
     {
         $document = FinanceDocument::query()
-            ->with('items')
+            ->with(['items', 'financeClient'])
             ->where('hopital_id', current_hopital_id())
             ->findOrFail($id);
 
@@ -251,7 +418,9 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
         $this->documentId = $document->id;
         $this->mode = 'edit';
         $this->document_type = $document->document_type;
+        $this->beneficiary_type = $document->beneficiary_type ?: ($document->finance_client_id ? 'client' : 'patient');
         $this->dossier_patient_id = $document->dossier_patient_id;
+        $this->finance_client_id = $document->finance_client_id;
         $this->number = $document->number;
         $this->issue_date = optional($document->issue_date)->format('Y-m-d') ?: now()->format('Y-m-d');
         $this->validity_days = $document->valid_until && $document->issue_date
@@ -265,6 +434,7 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
             ->map(fn($item) => [
                 'line_type' => $item->line_type,
                 'acte_id' => $item->acte_id,
+                'medicament_id' => $item->medicament_id,
                 'designation' => $item->designation,
                 'quantity' => (float) $item->quantity,
                 'price' => (float) $item->price_ht,
@@ -374,8 +544,58 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
                     <x-input wire:model="number" label="Numero *" />
                 </div>
 
-                <x-select.styled label="Patient (optionnel)" wire:model="dossier_patient_id" :request="route('api.patient')"
-                    select="label:name|value:id" />
+                <x-select.styled wire:model.live="beneficiary_type" label="Beneficiaire *" :options="[
+                    ['label' => 'Patient', 'value' => 'patient'],
+                    ['label' => 'Client', 'value' => 'client'],
+                ]" select="label:label|value:value" />
+
+                @if ($beneficiary_type === 'patient')
+                    <x-select.styled label="Patient *" wire:model="dossier_patient_id" :request="route('api.patient')"
+                        select="label:name|value:id" />
+                    @error('dossier_patient_id')
+                        <p class="text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                @else
+                    <div class="space-y-3">
+                        <x-select.styled label="Client *" wire:model="finance_client_id" :request="route('api.clients')"
+                            select="label:name|value:id" />
+                        @error('finance_client_id')
+                            <p class="text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+
+                        @if ($showQuickClientForm)
+                            <div class="rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
+                                <p class="text-sm font-bold text-slate-900 dark:text-white">Nouveau client rapide</p>
+                                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                    <x-input wire:model="quickClientName" label="Nom / Raison sociale *" />
+                                    <x-select.styled wire:model="quickClientType" label="Type" :options="[
+                                        ['label' => 'Particulier', 'value' => 'particulier'],
+                                        ['label' => 'Institution', 'value' => 'institution'],
+                                    ]" select="label:label|value:value" />
+                                    <x-input wire:model="quickClientPhone" label="Telephone" />
+                                    <x-input wire:model="quickClientEmail" label="Email" />
+                                </div>
+                                <div class="mt-3 flex gap-2">
+                                    <flux:button wire:click="createQuickClient" variant="primary" size="sm" icon="check">
+                                        Enregistrer le client
+                                    </flux:button>
+                                    <flux:button wire:click="$set('showQuickClientForm', false)" variant="ghost" size="sm">
+                                        Annuler
+                                    </flux:button>
+                                </div>
+                            </div>
+                        @else
+                            <div class="flex flex-wrap gap-2">
+                                <flux:button wire:click="$set('showQuickClientForm', true)" variant="ghost" size="sm" icon="plus">
+                                    Creer un client rapide
+                                </flux:button>
+                                <a href="{{ route('facturation.clients') }}" wire:navigate>
+                                    <flux:button variant="ghost" size="sm" icon="user-group">Gerer les clients</flux:button>
+                                </a>
+                            </div>
+                        @endif
+                    </div>
+                @endif
 
                 <div class="grid gap-3 md:grid-cols-3">
                     <x-input type="date" wire:model="issue_date" label="Date *" />
@@ -391,17 +611,32 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
                 <p class="text-sm font-bold text-slate-900 dark:text-white">Ajouter une ligne</p>
                 <div class="mt-3 grid gap-3 md:grid-cols-2">
                     <x-select.styled wire:model.live="line_type" label="Type ligne" :options="[
-                        ['label' => 'Acte', 'value' => 'acte'],
-                        ['label' => 'Service', 'value' => 'service'],
+                        ['label' => 'Acte medical', 'value' => 'acte'],
+                        ['label' => 'Prestation', 'value' => 'service'],
+                        ['label' => 'Produit (pharmacie)', 'value' => 'produit'],
+                        ['label' => 'Autre', 'value' => 'autre'],
                     ]" select="label:label|value:value" />
+
                     @if ($line_type === 'acte')
-                        <x-select.styled wire:model="selectedActeId" label="Acte"
-                            :options="$this->actes->map(fn($a) => ['label' => $a->name, 'value' => (string) $a->id])->all()"
-                            select="label:label|value:value" />
+                        <x-select.styled wire:model.live="acte_departement_id" label="Departement (filtre)"
+                            :request="route('api.departements')" select="label:name|value:id" placeholder="Tous" />
+                        <x-select.styled wire:model.live="acte_service_id" label="Service hospitalier (filtre)"
+                            :request="['url' => route('api.services'), 'params' => ['departement' => $acte_departement_id]]"
+                            select="label:name|value:id" placeholder="Tous" />
+                        <x-select.styled wire:model.live="selectedActeId" label="Acte *"
+                            :request="['url' => route('api.actes'), 'params' => ['departement' => $acte_departement_id, 'service' => $acte_service_id]]"
+                            select="label:name|value:id" />
+                    @elseif ($line_type === 'service')
+                        <x-input wire:model="designation" label="Prestation / service *"
+                            placeholder="Ex: Installation, maintenance, conseil, main d oeuvre..." />
+                    @elseif ($line_type === 'produit')
+                        <x-select.styled wire:model.live="selectedMedicamentId" label="Medicament (pharmacie) *"
+                            :request="route('api.medicaments')" select="label:name|value:id" />
                     @else
-                        <x-input wire:model="designation" label="Designation service" />
+                        <x-input wire:model="designation" label="Designation *" placeholder="Libelle libre..." />
                     @endif
-                    <x-number wire:model="quantity" label="Quantite" min="1" step="0.01" />
+
+                    <x-number wire:model="quantity" label="Quantite" min="0.01" step="0.01" />
                     <x-number wire:model="price" label="Prix HT" min="0" step="0.01" />
                     <x-number wire:model="tva" label="TVA %" min="0" step="0.01" />
                     <x-number wire:model="discount" label="Remise %" min="0" max="100" step="0.01" />
@@ -415,6 +650,7 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
                     <thead class="bg-slate-50 dark:bg-slate-900/70">
                         <tr class="text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
+                            <th class="px-3 py-2">Type</th>
                             <th class="px-3 py-2">Designation</th>
                             <th class="px-3 py-2 text-center">Qte</th>
                             <th class="px-3 py-2 text-right">HT</th>
@@ -425,6 +661,11 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                         @forelse ($items as $index => $item)
                             <tr wire:key="item-{{ $index }}">
+                                <td class="px-3 py-2">
+                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                        {{ $this->lineTypeLabel($item['line_type']) }}
+                                    </span>
+                                </td>
                                 <td class="px-3 py-2">
                                     <input type="text" wire:model.live.debounce.300ms="items.{{ $index }}.designation"
                                         class="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
@@ -441,7 +682,7 @@ new #[Title('Creation document'), Layout('layouts::app.other.facturation')] clas
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-3 py-6 text-center text-slate-500 dark:text-slate-400">Aucune ligne ajoutee.</td>
+                                <td colspan="6" class="px-3 py-6 text-center text-slate-500 dark:text-slate-400">Aucune ligne ajoutee.</td>
                             </tr>
                         @endforelse
                     </tbody>

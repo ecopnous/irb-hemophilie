@@ -3,6 +3,7 @@
 namespace App\Models\facturation;
 
 use App\Models\Configs\Acte;
+use App\Models\prescription\Medicament;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,6 +12,7 @@ class FinanceDocumentItem extends Model
     protected $fillable = [
         'finance_document_id',
         'acte_id',
+        'medicament_id',
         'line_type',
         'designation',
         'quantity',
@@ -39,5 +41,21 @@ class FinanceDocumentItem extends Model
     public function acte(): BelongsTo
     {
         return $this->belongsTo(Acte::class);
+    }
+
+    public function medicament(): BelongsTo
+    {
+        return $this->belongsTo(Medicament::class);
+    }
+
+    public function lineTypeLabel(): string
+    {
+        return match ($this->line_type) {
+            'acte' => 'Acte',
+            'service' => 'Prestation',
+            'produit' => 'Produit',
+            'autre' => 'Autre',
+            default => ucfirst((string) $this->line_type),
+        };
     }
 }

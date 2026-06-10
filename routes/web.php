@@ -85,6 +85,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('/caisse', 'pages::facturation.cash')->name('cash');
         Route::livewire('/inventaire', 'pages::facturation.inventory')->name('inventory');
         Route::livewire('/inventaire/create', 'pages::facturation.inventory')->name('inventory.create');
+        Route::livewire('/clients', 'pages::facturation.clients')->name('clients');
         Route::get('/inventaire/rapport/pdf', InventoryReportPdfController::class)->name('inventory.report.pdf');
     });
 

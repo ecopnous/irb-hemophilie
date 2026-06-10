@@ -85,7 +85,9 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
         DB::transaction(function () use ($source) {
             $invoice = FinanceDocument::query()->create([
                 'hopital_id' => $source->hopital_id,
+                'beneficiary_type' => $source->beneficiary_type,
                 'dossier_patient_id' => $source->dossier_patient_id,
+                'finance_client_id' => $source->finance_client_id,
                 'source_document_id' => $source->id,
                 'document_type' => 'facture',
                 'status' => 'provisoire',
@@ -105,6 +107,7 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
                 $invoice->items()->create([
                     'line_type' => $item->line_type,
                     'acte_id' => $item->acte_id,
+                    'medicament_id' => $item->medicament_id,
                     'designation' => $item->designation,
                     'quantity' => $item->quantity,
                     'price_ht' => $item->price_ht,
@@ -135,7 +138,9 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
         DB::transaction(function () use ($source) {
             $avoir = FinanceDocument::query()->create([
                 'hopital_id' => $source->hopital_id,
+                'beneficiary_type' => $source->beneficiary_type,
                 'dossier_patient_id' => $source->dossier_patient_id,
+                'finance_client_id' => $source->finance_client_id,
                 'source_document_id' => $source->id,
                 'document_type' => 'avoir',
                 'status' => 'avoir',
@@ -154,6 +159,7 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
                 $avoir->items()->create([
                     'line_type' => $item->line_type,
                     'acte_id' => $item->acte_id,
+                    'medicament_id' => $item->medicament_id,
                     'designation' => $item->designation,
                     'quantity' => $item->quantity,
                     'price_ht' => $item->price_ht,
@@ -174,7 +180,7 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
     #[Computed]
     public function rows()
     {
-        return FinanceDocument::query()->with(['dossierPatient', 'sourceDocument'])
+        return FinanceDocument::query()->with(['dossierPatient', 'financeClient', 'sourceDocument'])
             ->where('hopital_id', current_hopital_id())
             ->when($this->year, fn($q) => $q->whereYear('issue_date', $this->year))
             ->when($this->typeFilter !== '', fn($q) => $q->where('document_type', $this->typeFilter))
@@ -188,7 +194,11 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
                             ->where('nom', 'like', $term)
                             ->orWhere('postnom', 'like', $term)
                             ->orWhere('prenom', 'like', $term)
-                            ->orWhere('nin', 'like', $term));
+                            ->orWhere('nin', 'like', $term))
+                        ->orWhereHas('financeClient', fn($sq) => $sq
+                            ->where('name', 'like', $term)
+                            ->orWhere('phone', 'like', $term)
+                            ->orWhere('email', 'like', $term));
                 });
             })
             ->latest('issue_date')
@@ -249,7 +259,7 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
 
     <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
         <div class="grid gap-3 md:grid-cols-4">
-            <x-input wire:model.live.debounce.300ms="search" label="Recherche" placeholder="Numero, patient..." />
+            <x-input wire:model.live.debounce.300ms="search" label="Recherche" placeholder="Numero, patient, client..." />
             <x-number wire:model.live="year" min="2020" max="2100" label="Annee" />
             <x-select.styled wire:model.live="typeFilter" label="Type" :options="[
                 ['label' => 'Tous', 'value' => ''],
@@ -272,7 +282,7 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
                             <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $meta['class'] }}">{{ $meta['label'] }}</span>
                             <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">{{ $this->documentTypeLabel($row->document_type) }}</span>
                         </div>
-                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ $row->dossierPatient?->full_name ?: 'Patient non renseigne' }}</p>
+                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ $row->beneficiaryLabel() }}</p>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Date: {{ optional($row->issue_date)->format('d/m/Y') }} · Validite: {{ optional($row->valid_until)->format('d/m/Y') ?: '-' }}</p>
                     </div>
                     <div class="text-left lg:text-right">

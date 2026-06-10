@@ -2,16 +2,22 @@
 
 use App\Models\Consultation;
 use App\Models\Imagerie;
+use App\Models\liaison\Image;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new #[Title('Bon d\'imagerie')] class extends Component {
+    use WithFileUploads;
+
     public Consultation $consultation;
     public ?int $selectedActeId = null;
     public array $imagerieForm = [];
     public array $acteForm = [];
+    public $imageriePhotos = [];
     public ?string $successMessage = null;
 
     public function mount(int $id): void
@@ -131,7 +137,124 @@ new #[Title('Bon d\'imagerie')] class extends Component {
         }
 
         $this->selectedActeId = $acteId;
+        $this->reset('imageriePhotos');
         $this->syncSelectedActeForm();
+    }
+
+    protected function acteConsultationPivotId(int $acteId): ?int
+    {
+        return DB::table('acte_consultation')
+            ->where('consultation_id', $this->consultation->id)
+            ->where('acte_id', $acteId)
+            ->value('id');
+    }
+
+    protected function imagerieActePivotIds(): array
+    {
+        return $this->imagerieActes()
+            ->map(fn ($acte) => $this->acteConsultationPivotId((int) $acte->id))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    public function getSelectedActeImagesProperty()
+    {
+        if (! $this->selectedActeId) {
+            return collect();
+        }
+
+        $pivotId = $this->acteConsultationPivotId((int) $this->selectedActeId);
+
+        if (! $pivotId) {
+            return collect();
+        }
+
+        return Image::query()
+            ->where('acte_consultation_id', $pivotId)
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    public function acteImagesCount(int $acteId): int
+    {
+        $pivotId = $this->acteConsultationPivotId($acteId);
+
+        if (! $pivotId) {
+            return 0;
+        }
+
+        return Image::query()->where('acte_consultation_id', $pivotId)->count();
+    }
+
+    public function uploadImageriePhotos(): void
+    {
+        if (! is_array($this->imageriePhotos)) {
+            $this->imageriePhotos = array_filter([$this->imageriePhotos]);
+        }
+
+        $this->validate(
+            [
+                'selectedActeId' => ['required', 'integer'],
+                'imageriePhotos' => ['required', 'array', 'min:1'],
+                'imageriePhotos.*' => ['image', 'max:10240'],
+            ],
+            [
+                'selectedActeId.required' => 'Veuillez selectionner un examen.',
+                'imageriePhotos.required' => 'Veuillez selectionner au moins une image.',
+                'imageriePhotos.min' => 'Veuillez selectionner au moins une image.',
+                'imageriePhotos.*.image' => 'Chaque fichier doit etre une image valide.',
+                'imageriePhotos.*.max' => 'Chaque image ne doit pas depasser 10 Mo.',
+            ],
+        );
+
+        $selectedActe = $this->selectedActe();
+
+        if (! $selectedActe) {
+            $this->addError('selectedActeId', 'Veuillez selectionner un examen d imagerie valide.');
+
+            return;
+        }
+
+        $pivotId = $this->acteConsultationPivotId((int) $selectedActe->id);
+
+        abort_if(! $pivotId, 422, 'Examen d imagerie introuvable pour cette consultation.');
+
+        $uploadedCount = count($this->imageriePhotos);
+
+        foreach ($this->imageriePhotos as $photo) {
+            $path = $photo->storePublicly(
+                'imagerie/' . $this->consultation->id . '/' . $selectedActe->id,
+                'public',
+            );
+
+            Image::query()->create([
+                'name' => $photo->getClientOriginalName(),
+                'path' => $path,
+                'acte_consultation_id' => $pivotId,
+            ]);
+        }
+
+        $this->reset('imageriePhotos');
+        $this->successMessage = $uploadedCount > 1
+            ? $uploadedCount . ' images ajoutees pour ' . $selectedActe->name . '.'
+            : 'Image ajoutee pour ' . $selectedActe->name . '.';
+    }
+
+    public function deleteImageriePhoto(int $imageId): void
+    {
+        $pivotIds = $this->imagerieActePivotIds();
+
+        $image = Image::query()
+            ->whereKey($imageId)
+            ->whereIn('acte_consultation_id', $pivotIds)
+            ->firstOrFail();
+
+        Storage::disk('public')->delete($image->path);
+        $image->delete();
+
+        $this->successMessage = 'Image supprimee.';
     }
 
     public function saveCompteRendu(): void
@@ -504,6 +627,7 @@ new #[Title('Bon d\'imagerie')] class extends Component {
                                 <th scope="col" class="px-6 py-4 font-semibold">Clinique</th>
                                 <th scope="col" class="px-6 py-4 font-semibold">Protocole</th>
                                 <th scope="col" class="px-6 py-4 font-semibold">Conclusion</th>
+                                <th scope="col" class="px-6 py-4 font-semibold text-center">Images</th>
                                 <th scope="col" class="px-6 py-4 font-semibold text-center">Etat</th>
                                 <th scope="col" class="px-6 py-4 font-semibold text-right">Action</th>
                             </tr>
@@ -533,6 +657,12 @@ new #[Title('Bon d\'imagerie')] class extends Component {
                                         {{ $this->pivotExcerpt($acte, 'cloture') }}
                                     </td>
                                     <td class="px-6 py-4.5 text-center">
+                                        <span
+                                            class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                            {{ $this->acteImagesCount((int) $acte->id) }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4.5 text-center">
                                         <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold {{ $this->acteStatusClass($acte) }}">
                                             {{ $this->acteStatusLabel($acte) }}
                                         </span>
@@ -546,7 +676,7 @@ new #[Title('Bon d\'imagerie')] class extends Component {
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                    <td colspan="8" class="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                                         Aucun examen d imagerie n est rattache a cette consultation.
                                     </td>
                                 </tr>
@@ -557,19 +687,81 @@ new #[Title('Bon d\'imagerie')] class extends Component {
             </x-card>
 
             <x-card shadow="sm">
-                <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-6 py-6 dark:border-slate-700 dark:bg-slate-900/60">
-                    <div class="flex items-start gap-4">
-                        <div class="rounded-2xl bg-fuchsia-100 p-3 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300">
-                            <x-icon name="photo" class="h-6 w-6" />
-                        </div>
-                        <div class="space-y-2">
-                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Zone images</h2>
+                <div class="rounded-xl border border-slate-200/80 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+                                Images de l examen selectionne
+                            </h2>
                             <p class="text-sm text-slate-500 dark:text-slate-400">
-                                Cet espace est pret a accueillir les cliches et pieces jointes d imagerie quand le flux
-                                de medias sera branche. Pour le moment, il sert de zone de reserve UI.
+                                Chaque examen d imagerie possede ses propres clichés et pieces jointes.
                             </p>
                         </div>
+
+                        @if ($this->selectedActe())
+                            <span
+                                class="inline-flex items-center gap-2 rounded-full bg-fuchsia-100 px-3 py-1.5 text-sm font-bold text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300">
+                                <span class="h-2.5 w-2.5 rounded-full bg-current"></span>
+                                {{ $this->selectedActeImages->count() }} image(s) — {{ $this->selectedActeTitle() }}
+                            </span>
+                        @endif
                     </div>
+                </div>
+
+                <div class="mt-6 space-y-5">
+                    @if ($this->selectedActe())
+                        <x-upload label="Images" accept="image/*" wire:model="imageriePhotos" multiple delete
+                            hint="JPG, PNG, WEBP — max 10 Mo par image" />
+
+                        @error('imageriePhotos')
+                            <p class="text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                        @error('imageriePhotos.*')
+                            <p class="text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+
+                        <div class="flex justify-end">
+                            <x-button icon="photo" text="Envoyer les images" color="primary"
+                                wire:click="uploadImageriePhotos" wire:loading.attr="disabled"
+                                wire:target="uploadImageriePhotos,imageriePhotos" />
+                        </div>
+
+                        @if ($this->selectedActeImages->isNotEmpty())
+                            <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                                @foreach ($this->selectedActeImages as $image)
+                                    <div wire:key="imagerie-photo-{{ $image->id }}"
+                                        class="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+                                        <a href="{{ $image->url() }}" target="_blank" rel="noopener">
+                                            <img src="{{ $image->url() }}" alt="{{ $image->name }}"
+                                                class="aspect-square w-full object-cover transition group-hover:scale-[1.02]" />
+                                        </a>
+                                        <div class="space-y-2 p-3">
+                                            <p class="truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
+                                                title="{{ $image->name }}">
+                                                {{ $image->name }}
+                                            </p>
+                                            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                                {{ $image->created_at?->format('d/m/Y H:i') }}
+                                            </p>
+                                            <x-button flat text="Supprimer" color="rose" size="sm"
+                                                wire:click="deleteImageriePhoto({{ $image->id }})"
+                                                wire:confirm="Supprimer cette image ?" />
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <p
+                                class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                                Aucune image soumise pour {{ $this->selectedActeTitle() }}.
+                            </p>
+                        @endif
+                    @else
+                        <p
+                            class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                            Selectionnez un examen dans le tableau pour y ajouter des images.
+                        </p>
+                    @endif
                 </div>
             </x-card>
         </main>

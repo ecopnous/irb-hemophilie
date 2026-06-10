@@ -8,6 +8,8 @@ use App\Models\Configs\PacquetSoin;
 use App\Models\Configs\Projet;
 use App\Models\Configs\Service;
 use App\Models\DossierPatient;
+use App\Models\facturation\FinanceClient;
+use App\Models\prescription\Medicament;
 use App\Models\Localisations\Country;
 use App\Models\Localisations\Province;
 use App\Models\other\Symptome;
@@ -60,6 +62,70 @@ Route::name('api.')->group(function () {
             ]);
     })->name('patient');
 
+    Route::get('/clients', function (Request $request) {
+        $term = $request->search;
+
+        if (! $term || strlen($term) < 2) {
+            return response()->json([]);
+        }
+
+        return FinanceClient::query()
+            ->where('hopital_id', current_hopital_id())
+            ->where('is_active', true)
+            ->where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%")
+                    ->orWhere('phone', 'like', "%{$term}%")
+                    ->orWhere('tax_id', 'like', "%{$term}%");
+            })
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['id', 'name', 'phone', 'email', 'type'])
+            ->map(fn ($client) => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'description' => collect([$client->phone, $client->email, $client->type === 'institution' ? 'Institution' : 'Particulier'])
+                    ->filter()
+                    ->implode(' · '),
+            ]);
+    })->name('clients');
+
+    Route::get('/medicaments', function (Request $request) {
+        $hopitalId = current_hopital_id();
+        $term = $request->search;
+
+        return Medicament::query()
+            ->where('is_active', true)
+            ->whereHas('pharmacies', fn ($q) => $q->where('hopital_id', $hopitalId))
+            ->when($term, function ($q) use ($term) {
+                $like = '%' . $term . '%';
+                $q->where(function ($inner) use ($like) {
+                    $inner->where('name', 'like', $like)
+                        ->orWhere('reference', 'like', $like)
+                        ->orWhere('dci', 'like', $like);
+                });
+            })
+            ->with(['pharmacies' => fn ($q) => $q->where('hopital_id', $hopitalId)])
+            ->orderBy('name')
+            ->limit(50)
+            ->get()
+            ->map(function (Medicament $medicament) {
+                $stock = (int) $medicament->pharmacies->sum(fn ($pharmacy) => (int) $pharmacy->pivot->quantiter);
+                $price = (float) ($medicament->pharmacies
+                    ->first(fn ($pharmacy) => (float) $pharmacy->pivot->montant > 0)?->pivot->montant ?? 0);
+
+                return [
+                    'id' => $medicament->id,
+                    'name' => $medicament->name,
+                    'description' => collect([
+                        $medicament->reference,
+                        'Stock: ' . $stock,
+                        $price > 0 ? number_format($price, 2, ',', ' ') . ' USD' : null,
+                    ])->filter()->implode(' · '),
+                ];
+            });
+    })->name('medicaments');
+
     Route::prefix('configs')->group(function () {
         // retourne les utilisateurs (corps medical) de l'hopital concerner
         Route::get('/user-in', function (Request $request) {
@@ -106,7 +172,20 @@ Route::name('api.')->group(function () {
                 ->when($request->departement, fn($q) => $q->where('departement_id', $request->departement))
                 ->when($request->service, fn($q) => $q->where('service_id', $request->service))
                 ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
-                ->get(['id', 'name']);
+                ->where(function ($q) {
+                    $q->where('is_active', true)->orWhereNull('is_active');
+                })
+                ->orderBy('name')
+                ->limit(50)
+                ->get(['id', 'name', 'base_price', 'montant', 'code'])
+                ->map(fn ($acte) => [
+                    'id' => $acte->id,
+                    'name' => $acte->name,
+                    'description' => collect([
+                        $acte->code,
+                        number_format((float) ($acte->base_price ?? $acte->montant ?? 0), 2, ',', ' ') . ' USD',
+                    ])->filter()->implode(' · '),
+                ]);
         })->name('actes');
     });
 

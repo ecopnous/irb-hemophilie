@@ -14,6 +14,8 @@ class FinanceDocument extends Model
     protected $fillable = [
         'hopital_id',
         'dossier_patient_id',
+        'beneficiary_type',
+        'finance_client_id',
         'source_document_id',
         'document_type',
         'status',
@@ -45,6 +47,31 @@ class FinanceDocument extends Model
     public function dossierPatient(): BelongsTo
     {
         return $this->belongsTo(DossierPatient::class);
+    }
+
+    public function financeClient(): BelongsTo
+    {
+        return $this->belongsTo(FinanceClient::class);
+    }
+
+    public function beneficiaryLabel(): string
+    {
+        if ($this->beneficiary_type === 'client' && $this->financeClient) {
+            return $this->financeClient->name;
+        }
+
+        $patient = $this->dossierPatient;
+
+        if (! $patient) {
+            return 'Non renseigne';
+        }
+
+        return trim(sprintf(
+            '%s %s %s',
+            strtoupper((string) $patient->nom),
+            strtoupper((string) $patient->postnom),
+            ucfirst((string) $patient->prenom),
+        ));
     }
 
     public function sourceDocument(): BelongsTo
