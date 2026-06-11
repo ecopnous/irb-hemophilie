@@ -227,7 +227,7 @@ new #[Title('Factures et devis'), Layout('layouts::app.other.facturation')] clas
         <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">{{ session('message') }}</div>
     @endif
 
-    <section class="overflow-hidden rounded-4xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/60 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+    <section class="overflow-hidden rounded-4xl border border-blue-100 bg-linear-to-br from-white via-blue-50/60 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
         <div class="space-y-6 px-6 py-6 md:px-8">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-2">

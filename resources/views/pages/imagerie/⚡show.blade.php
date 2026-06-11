@@ -458,7 +458,7 @@ new #[Title('Bon d\'imagerie')] class extends Component {
     @endif
 
     <section
-        class="overflow-hidden rounded-[2rem] border border-fuchsia-100 bg-gradient-to-br from-white via-fuchsia-50/70 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+        class="overflow-hidden rounded-4xl border border-fuchsia-100 bg-linear-to-br from-white via-fuchsia-50/70 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
         <div class="flex flex-col gap-6 px-6 py-6 md:px-8">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-3">

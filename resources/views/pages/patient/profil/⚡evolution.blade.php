@@ -177,7 +177,7 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
             </flux:callout>
         @else
             {{-- Insights --}}
-            <section class="rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 p-6 dark:border-indigo-500/30 dark:from-indigo-500/10 dark:via-slate-900 dark:to-cyan-500/10">
+            <section class="rounded-3xl border border-indigo-200 bg-linear-to-br from-indigo-50 via-white to-cyan-50 p-6 dark:border-indigo-500/30 dark:from-indigo-500/10 dark:via-slate-900 dark:to-cyan-500/10">
                 <p class="text-sm text-slate-600 dark:text-slate-300">{{ $m['insights']['summary'] }}</p>
                 @if (count($m['insights']['alerts']) > 0)
                     <div class="mt-3 flex flex-wrap gap-2">

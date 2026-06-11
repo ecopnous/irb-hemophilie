@@ -821,7 +821,7 @@ new class extends Component {
                 </div>
             @enderror
 
-            <div class="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+            <div class="max-h-96 space-y-3 overflow-y-auto pr-1">
                 @forelse ($actes_labo as $acte)
                     @php($isValidated = $this->acteIsValidated($acte))
                     <label wire:key="validation-acte-{{ $acte->id }}"

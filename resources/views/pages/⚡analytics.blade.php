@@ -250,7 +250,7 @@ new #[Title('Analytics hospitalier')] class extends Component {
         </section>
 
         {{-- Intelligence décisionnelle --}}
-        <section class="rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 p-6 dark:border-indigo-500/30 dark:from-indigo-500/10 dark:via-slate-900 dark:to-cyan-500/10">
+        <section class="rounded-3xl border border-indigo-200 bg-linear-to-br from-indigo-50 via-white to-cyan-50 p-6 dark:border-indigo-500/30 dark:from-indigo-500/10 dark:via-slate-900 dark:to-cyan-500/10">
             <div class="flex items-center gap-3">
                 <div class="rounded-2xl bg-indigo-600 p-3 text-white"><flux:icon.sparkles class="size-6" /></div>
                 <div>

@@ -1164,7 +1164,7 @@ new #[Title('Fiche de consultation')] class extends Component {
                     <section
                         class="overflow-hidden rounded-md border border-violet-200 bg-white shadow-sm dark:border-violet-500/25 dark:bg-slate-950/70">
                         <div
-                            class="border-b border-violet-100 bg-gradient-to-r from-violet-50 to-white px-5 py-4 dark:border-violet-500/20 dark:from-violet-950/40 dark:to-slate-950/70">
+                            class="border-b border-violet-100 bg-linear-to-r from-violet-50 to-white px-5 py-4 dark:border-violet-500/20 dark:from-violet-950/40 dark:to-slate-950/70">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div class="flex items-start gap-4">
                                     <div
