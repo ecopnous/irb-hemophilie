@@ -30,7 +30,7 @@ new #[Title('Bons d\'imagerie')] class extends Component {
 
 <div class="space-y-6">
     <section
-        class="overflow-hidden rounded-[2rem] border border-fuchsia-100 bg-gradient-to-br from-white via-fuchsia-50/60 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+        class="overflow-hidden rounded-4xl border border-fuchsia-100 bg-linear-to-br from-white via-fuchsia-50/60 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
         <div class="flex flex-col gap-6 px-6 py-6 md:px-8">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-3">
@@ -53,7 +53,7 @@ new #[Title('Bons d\'imagerie')] class extends Component {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-4 lg:min-w-[28rem]">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-4 lg:min-w-md">
                     <div
                         class="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
                         <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Reception</p>
