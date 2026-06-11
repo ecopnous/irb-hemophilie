@@ -7,6 +7,10 @@
         <flux:sidebar.nav>
             <flux:sidebar.item icon="airplay" href="{{ route('dashboard') }}" wire:navigate>Réception
             </flux:sidebar.item>
+            {{-- <flux:sidebar.item icon="clipboard-document-list" href="{{ route('reception.papeterie') }}" wire:navigate>Papeterie
+            </flux:sidebar.item>
+            <flux:sidebar.item icon="briefcase" href="{{ route('reception.services') }}" wire:navigate>Services de base
+            </flux:sidebar.item> --}}
             <flux:sidebar.item icon="inbox" href="{{ route('consultation.triage') }}" wire:navigate>Triage
             </flux:sidebar.item>
             <flux:sidebar.item icon="stethoscope" href="{{ route('consultation.index') }}" wire:navigate>Consultations

@@ -4,7 +4,7 @@
             <flux:sidebar.item icon="receipt" href="{{ route('facturation.index') }}" wire:navigate>Factures
                 clinique
             </flux:sidebar.item>
-            <flux:sidebar.item icon="receipt" :href="route('facturation.assurance.index')" wire:navigate>Factures
+            <flux:sidebar.item icon="file-chart-column" :href="route('facturation.assurance.index')" wire:navigate>Factures
                 assurance
             </flux:sidebar.item>
             <flux:sidebar.item icon="receipt-text" href="{{ route('facturation.documents') }}" wire:navigate>Factures et devis

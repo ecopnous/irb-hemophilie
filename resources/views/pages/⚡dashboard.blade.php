@@ -195,6 +195,24 @@ new #[Title('Tableau de bord réception')] class extends Component {
                     <span
                         class="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">{{ $this->overview['imagerie'] }}</span>
                 </a>
+
+                <a href="{{ route('reception.papeterie') }}" wire:navigate
+                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
+                    <div>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">Papeterie</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Stocks & consommables</p>
+                    </div>
+                    <flux:icon.clipboard-document-list class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
+                </a>
+
+                <a href="{{ route('reception.services') }}" wire:navigate
+                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
+                    <div>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">Services de base</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Prestations reception</p>
+                    </div>
+                    <flux:icon.briefcase class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
+                </a>
             </div>
         </div>
     </div>

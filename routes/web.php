@@ -16,6 +16,11 @@ Route::view('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('/dashboard', 'pages::dashboard')->name('dashboard');
+
+    Route::prefix('reception')->name('reception.')->group(function () {
+        Route::livewire('/papeterie', 'pages::reception.papeterie')->name('papeterie');
+        Route::livewire('/services', 'pages::reception.services')->name('services');
+    });
     Route::livewire('/analytics', 'pages::analytics')->name('analytics');
     Route::get('/analytics/export/excel', [AnalyticsExportController::class, 'excel'])->name('analytics.export.excel');
     Route::get('/analytics/export/pdf', [AnalyticsExportController::class, 'pdf'])->name('analytics.export.pdf');
