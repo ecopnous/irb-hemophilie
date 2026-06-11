@@ -25,7 +25,7 @@ return new class extends Migration {
         Schema::create('consultations', function (Blueprint $table) {
             $table->id();
             $table->string('reference');
-            $table->enum('type', ['consultation', 'depistage']);
+            $table->enum('type', ['visite', 'examen']);
             $table->enum('type_fichier', ['hémophilie', 'drépanocytose', 'standard'])->default('standard');
             $table->boolean('is_project_period')->default(false);
 

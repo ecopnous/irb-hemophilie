@@ -46,7 +46,7 @@ final class ReceptionSupplyTable extends PowerGridComponent
 
     protected function categoryLabel(string $category): string
     {
-        return app(ReceptionCatalogService::class)->categoryLabels()[$category] ?? ucfirst($category);
+        return app(ReceptionCatalogService::class)->papeterieCategoryLabels()[$category] ?? ucfirst($category);
     }
 
     public function fields(): PowerGridFields
@@ -163,7 +163,7 @@ final class ReceptionSupplyTable extends PowerGridComponent
 
     public function filters(): array
     {
-        $categories = collect(app(ReceptionCatalogService::class)->categoryLabels())
+        $categories = collect(app(ReceptionCatalogService::class)->papeterieCategoryLabels())
             ->map(fn ($label, $id) => ['id' => $id, 'name' => $label])
             ->values();
 

@@ -76,7 +76,7 @@ new #[Title('Papeterie reception'), Layout('layouts::app.other.reception')] clas
     #[Computed]
     public function categoryOptions(): array
     {
-        return collect(app(ReceptionCatalogService::class)->categoryLabels())
+        return collect(app(ReceptionCatalogService::class)->papeterieCategoryLabels())
             ->map(fn ($label, $value) => ['label' => $label, 'value' => $value])
             ->values()
             ->all();
@@ -96,7 +96,7 @@ new #[Title('Papeterie reception'), Layout('layouts::app.other.reception')] clas
 
     public function importCatalog(): void
     {
-        $created = app(ReceptionCatalogService::class)->seedSuppliesForHopital((int) current_hopital_id());
+        $created = app(ReceptionCatalogService::class)->seedPapeterieForHopital((int) current_hopital_id());
         $this->dispatch('pg:eventRefresh-receptionSupplyTable');
         unset($this->stats);
 
@@ -183,7 +183,7 @@ new #[Title('Papeterie reception'), Layout('layouts::app.other.reception')] clas
                     ->ignore($this->editingId),
             ],
             'formReference' => ['nullable', 'string', 'max:50'],
-            'formCategory' => ['required', 'in:papeterie,hygiene,consommable,autre'],
+            'formCategory' => ['required', 'in:papeterie,consommable,autre'],
             'formUnit' => ['required', 'string', 'max:60'],
             'formPlannedStock' => ['required', 'integer', 'min:0'],
             'formCurrentStock' => ['required', 'integer', 'min:0'],
@@ -257,8 +257,8 @@ new #[Title('Papeterie reception'), Layout('layouts::app.other.reception')] clas
     <flux:heading class="sr-only">Papeterie reception</flux:heading>
 
     <x-header_default
-        title="Papeterie & consommables"
-        subtitle="Catalogue, stocks prevus et mouvements du service reception"
+        title="Papeterie"
+        subtitle="Articles de bureau : stocks prevus, mouvements et alertes"
         :navigations="[
             ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
             ['label' => 'Reception', 'link' => 'dashboard', 'icon' => 'building-office-2'],
@@ -299,7 +299,7 @@ new #[Title('Papeterie reception'), Layout('layouts::app.other.reception')] clas
         <div class="space-y-5">
             <div>
                 <flux:heading size="lg">{{ $editingId ? 'Modifier l\'article' : 'Nouvel article' }}</flux:heading>
-                <flux:subheading>Referencez la papeterie ou les consommables du service reception.</flux:subheading>
+                <flux:subheading>Articles de bureau et fournitures administratives.</flux:subheading>
             </div>
             <div class="grid gap-4 md:grid-cols-2">
                 <div class="md:col-span-2">

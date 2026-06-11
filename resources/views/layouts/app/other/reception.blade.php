@@ -5,7 +5,7 @@
             </flux:sidebar.item>
             <flux:sidebar.item icon="clipboard-document-list" href="{{ route('reception.papeterie') }}" wire:navigate>Papeterie
             </flux:sidebar.item>
-            <flux:sidebar.item icon="briefcase" href="{{ route('reception.services') }}" wire:navigate>Services de base
+            <flux:sidebar.item icon="briefcase" href="{{ route('reception.services') }}" wire:navigate>Service de base
             </flux:sidebar.item>
         </flux:sidebar.nav>
     </x-slot>

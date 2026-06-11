@@ -6,56 +6,18 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Tableau de bord réception')] class extends Component {
-    public string $search = '';
-    public string $type = '';
-    public string $genre = '';
-    public string $user_id = '';
-    public string $departement_id = '';
-    public string $assignment = '';
-    public $province_id;
-    public $ville_id;
-    public $commune_id;
-    public $age_min;
-    public $age_max;
-    public $date_start;
-    public $date_end;
-
-    private function filterPayload(): array
-    {
-        return [
-            'search' => $this->search,
-            'type' => $this->type,
-            'genre' => $this->genre,
-            'user_id' => $this->user_id,
-            'departement_id' => $this->departement_id,
-            'assignment' => $this->assignment,
-            'province_id' => $this->province_id,
-            'ville_id' => $this->ville_id,
-            'commune_id' => $this->commune_id,
-            'age_min' => $this->age_min,
-            'age_max' => $this->age_max,
-            'date_start' => $this->date_start,
-            'date_end' => $this->date_end,
-        ];
-    }
-
     #[Computed]
     public function stats(): array
     {
         $service = app(DashboardMetricsService::class);
 
-        return $service->aggregateStats($service->receptionQuery($this->filterPayload()));
+        return $service->aggregateStats($service->receptionQuery());
     }
 
     #[Computed]
     public function overview(): array
     {
         return app(DashboardMetricsService::class)->overview();
-    }
-
-    public function resetFilters(): void
-    {
-        $this->reset(['search', 'type', 'genre', 'user_id', 'departement_id', 'assignment', 'province_id', 'ville_id', 'commune_id', 'age_min', 'age_max', 'date_start', 'date_end']);
     }
 };
 ?>
@@ -156,6 +118,24 @@ new #[Title('Tableau de bord réception')] class extends Component {
             </div>
 
             <div class="mt-5 grid gap-3">
+                <a href="{{ route('reception.papeterie') }}" wire:navigate
+                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
+                    <div>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">Papeterie</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Fournitures de bureau</p>
+                    </div>
+                    <flux:icon.clipboard-document-list class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
+                </a>
+
+                <a href="{{ route('reception.services') }}" wire:navigate
+                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
+                    <div>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white">Service de base</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Equipement menager</p>
+                    </div>
+                    <flux:icon.briefcase class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
+                </a>
+
                 <a href="{{ route('consultation.triage') }}" wire:navigate
                     class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
                     <div>
@@ -194,24 +174,6 @@ new #[Title('Tableau de bord réception')] class extends Component {
                     </div>
                     <span
                         class="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">{{ $this->overview['imagerie'] }}</span>
-                </a>
-
-                <a href="{{ route('reception.papeterie') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Papeterie</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Stocks & consommables</p>
-                    </div>
-                    <flux:icon.clipboard-document-list class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
-                </a>
-
-                <a href="{{ route('reception.services') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Services de base</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Prestations reception</p>
-                    </div>
-                    <flux:icon.briefcase class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
                 </a>
             </div>
         </div>
@@ -260,92 +222,11 @@ new #[Title('Tableau de bord réception')] class extends Component {
     </section>
 
     <div>
-        <div class="flex flex-col gap-2 px-3 pt-2 pb-4 md:flex-row md:items-center md:justify-between">
-            <div>
-                <p class="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Suivi opérationnel</p>
-                <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Registre des consultations</h2>
-            </div>
-            <div
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-                <p class="font-semibold text-slate-900 dark:text-white">Consultations Aujourd'hui :
-                    {{ $this->stats['aujourd_hui'] }}</p>
-            </div>
+        <div>
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Suivi opérationnel</p>
+            <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-white">Registre des consultations</h2>
         </div>
 
-        <div class="mb-4">
-            <x-card header="Recherche avancee" minimize="mount">
-                <div class="space-y-5 p-5">
-                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                        <x-input label="Recherche" wire:model.live.debounce.400ms="search"
-                            placeholder="Reference, NIN, INS, nom..." />
-
-                        <x-select.styled label="Type" wire:model.live="type" :options="[
-                            ['label' => 'Tous', 'value' => ''],
-                            ['label' => 'Consultation', 'value' => 'consultation'],
-                            ['label' => 'Depistage', 'value' => 'depistage'],
-                        ]"
-                            select="label:label|value:value" />
-
-                        <x-select.styled label="Affectation" wire:model.live="assignment" :options="[
-                            ['label' => 'Toutes', 'value' => ''],
-                            ['label' => 'Assignees', 'value' => 'assigned'],
-                            ['label' => 'Sans medecin', 'value' => 'unassigned'],
-                        ]"
-                            select="label:label|value:value" />
-
-                        <x-select.styled label="Departement" wire:model.live="departement_id" :request="route('api.departements')"
-                            select="label:name|value:id" searchable />
-
-                        <x-select.styled label="Medecin" wire:model.live="user_id" :request="[
-                            'url' => route('api.usersConnected'),
-                            'params' => ['hopital_id' => current_hopital_id()],
-                        ]"
-                            select="label:name|value:id" searchable />
-                    </div>
-
-                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                        <x-select.styled label="Genre" wire:model.live="genre" :options="[
-                            ['label' => 'Tous', 'value' => ''],
-                            ['label' => 'Homme', 'value' => 'M'],
-                            ['label' => 'Femme', 'value' => 'F'],
-                        ]"
-                            select="label:label|value:value" />
-
-                        <x-date label="Periode" wire:model.live="date_start" wire:model:end.live="date_end" range />
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <x-number label="Age min" wire:model.live="age_min" min="0" />
-                            <x-number label="Age max" wire:model.live="age_max" min="0" />
-                        </div>
-
-                        <x-select.styled label="Province" wire:model.live="province_id" :request="route('api.provinces')"
-                            select="label:name|value:id" searchable />
-
-                        <x-select.styled label="Ville" wire:model.live="ville_id" :request="[
-                            'url' => route('api.villes'),
-                            'params' => ['province' => $province_id],
-                        ]" :disabled="!$province_id"
-                            wire:key="consultation-ville-{{ $province_id }}" select="label:name|value:id"
-                            searchable />
-                    </div>
-
-                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                        <x-select.styled label="Commune" wire:model.live="commune_id" :request="[
-                            'url' => route('api.communes'),
-                            'params' => ['ville' => $ville_id],
-                        ]"
-                            :disabled="!$ville_id" wire:key="consultation-commune-{{ $ville_id }}"
-                            select="label:name|value:id" searchable />
-                        <x-button wire:click="resetFilters" outline icon="arrow-path">
-                            Reinitialiser
-                        </x-button>
-                    </div>
-                </div>
-            </x-card>
-        </div>
-
-        <livewire:reception-table :search="$search" :type="$type" :genre="$genre" :user_id="$user_id"
-            :departement_id="$departement_id" :assignment="$assignment" :province_id="$province_id" :ville_id="$ville_id" :commune_id="$commune_id"
-            :age_min="$age_min" :age_max="$age_max" :date_start="$date_start" :date_end="$date_end" defer />
+        <livewire:reception-table />
     </div>
 </div>
