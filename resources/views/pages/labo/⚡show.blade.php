@@ -49,9 +49,9 @@ new class extends Component {
         $this->prelevement_date = $this->labo->date_heure_prelevemnt?->format('Y-m-d');
         $this->prelevement_heure = $this->labo->date_heure_prelevemnt?->format('H:i');
         $this->preleveur_id = $this->labo->user_id;
-        $this->renseignement = (string) ($this->labo->renseignement ?? '');
         $this->notes = (string) ($this->labo->note ?? '');
         $this->antibiotiques = (string) ($this->labo->antibiotique ?? '');
+        $this->renseignement = (string) ($this->labo->renseignement ?? '');
         $this->commentaire = (string) ($this->labo->commentaire ?? '');
         $this->actes_labo = $this->labo->consultation->actes;
         $this->selectedValidationActeIds = [];
@@ -107,9 +107,6 @@ new class extends Component {
     {
         return array_merge(
             [
-                'renseignement' => filled($this->renseignement) ? $this->renseignement : null,
-                'note' => filled($this->notes) ? $this->notes : null,
-                'antibiotique' => filled($this->antibiotiques) ? $this->antibiotiques : null,
                 'commentaire' => filled($this->commentaire) ? $this->commentaire : null,
             ],
             $extra,
@@ -623,36 +620,6 @@ new class extends Component {
                     @endif
                 </div>
             </x-card>
-
-            <x-card shadow="sm" header="Contexte du laboratoire"
-                class="border-none ring-1 ring-slate-200 dark:ring-slate-800">
-                <div class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
-                    <div class="grid gap-4 md:grid-cols-2">
-                        <x-input label="Note laboratoire" wire:model="notes" placeholder="Note ou precision interne" />
-                        <x-input label="Antibiotiques" wire:model="antibiotiques"
-                            placeholder="Traitement en cours si renseigne" />
-                    </div>
-
-                    <x-textarea label="Renseignement clinique" wire:model="renseignement"
-                        hint="Contexte clinique transmis au laboratoire."
-                        placeholder="Saisissez le renseignement utile..." />
-
-                    <x-textarea label="Commentaire de validation" wire:model="commentaire"
-                        hint="Ce commentaire accompagne la validation individuelle ou globale du bon."
-                        placeholder="Saisissez une note de validation..." />
-
-                    <div class="flex flex-wrap items-center justify-start gap-3 sm:justify-end">
-                        <x-button icon="check-circle" text="Validation individuelle des examens" color="secondary"
-                            wire:click="openValidationModal" wire:loading.attr="disabled"
-                            wire:target="openValidationModal,validateSelectedActes" />
-                        <x-button icon="document-check" text="Valider le bon" color="emerald"
-                            wire:click="validateBon" wire:loading.attr="disabled" wire:target="validateBon">
-                            <span wire:loading.remove wire:target="validateBon">Valider le bon</span>
-                            <span wire:loading wire:target="validateBon">Validation...</span>
-                        </x-button>
-                    </div>
-                </div>
-            </x-card>
         </main>
 
         <aside class="space-y-6">
@@ -751,25 +718,36 @@ new class extends Component {
                 </div>
             </x-card>
 
-            <div class="space-y-2">
-                <x-card shadow="sm" header="Note laboratoire" minimize="mount">
-                    <div class="text-sm text-slate-600 dark:text-slate-300">
-                        <p>{{ $labo->note ?: 'Aucune note laboratoire fournie.' }}</p>
-                    </div>
-                </x-card>
+            <x-card shadow="sm" header="Contexte du laboratoire"
+                class="border-none ring-1 ring-slate-200 dark:ring-slate-800">
+                <div class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                    <x-textarea label="Note laboratoire" wire:model="notes"
+                        placeholder="Saisissez le renseignement utile..." disabled />
+                    <x-textarea label="Antibiotiques" wire:model="antibiotiques"
+                        placeholder="Saisissez le renseignement utile..." disabled />
+                    <x-textarea label="Renseignement clinique" wire:model="renseignement"
+                        placeholder="Saisissez le renseignement utile..." disabled />
+                </div>
+            </x-card>
 
-                <x-card shadow="sm" header="Renseignement" minimize="mount">
-                    <div class="text-sm text-slate-600 dark:text-slate-300">
-                        <p>{{ $labo->renseignement ?: 'Aucun renseignement fourni.' }}</p>
-                    </div>
-                </x-card>
+            <x-card shadow="sm" header="Validation du bon"
+                class="border-none ring-1 ring-slate-200 dark:ring-slate-800">
+                <div class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                    <x-textarea label="Commentaire de validation" wire:model="commentaire"
+                        placeholder="Saisissez une note de validation..." />
 
-                <x-card shadow="sm" header="Antibiotiques" minimize="mount">
-                    <div class="text-sm text-slate-600 dark:text-slate-300">
-                        <p>{{ $labo->antibiotique ?: 'Aucun antibiotique renseigne.' }}</p>
+                    <div class="flex flex-wrap items-center justify-start gap-3 sm:justify-end">
+                        <x-button icon="check-circle" text="Validation individuel" color="secondary"
+                            wire:click="openValidationModal" wire:loading.attr="disabled"
+                            wire:target="openValidationModal,validateSelectedActes" />
+                        <x-button icon="document-check" text="Valider le bon" color="emerald"
+                            wire:click="validateBon" wire:loading.attr="disabled" wire:target="validateBon">
+                            <span wire:loading.remove wire:target="validateBon">Valider le bon</span>
+                            <span wire:loading wire:target="validateBon">Validation...</span>
+                        </x-button>
                     </div>
-                </x-card>
-            </div>
+                </div>
+            </x-card>
         </aside>
     </div>
 

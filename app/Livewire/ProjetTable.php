@@ -2,77 +2,113 @@
 
 namespace App\Livewire;
 
-use App\Models\configs\Projet;
-use Illuminate\Support\Carbon;
+use App\Models\Configs\Projet;
 use Illuminate\Database\Eloquent\Builder;
-use PowerComponents\LivewirePowerGrid\Button;
+use Illuminate\Support\Facades\Blade;
 use PowerComponents\LivewirePowerGrid\Column;
 use PowerComponents\LivewirePowerGrid\Facades\Filter;
 use PowerComponents\LivewirePowerGrid\Facades\PowerGrid;
-use PowerComponents\LivewirePowerGrid\PowerGridFields;
 use PowerComponents\LivewirePowerGrid\PowerGridComponent;
+use PowerComponents\LivewirePowerGrid\PowerGridFields;
 
 final class ProjetTable extends PowerGridComponent
 {
     public string $tableName = 'projetTable';
+    public int $rowCounter = 0;
 
     public function setUp(): array
     {
-        // $this->showCheckBox();
+        $this->rowCounter = 0;
 
         return [
-            PowerGrid::header()
-                ->showSearchInput(),
-            PowerGrid::footer()
-                ->showPerPage()
-                ->showRecordCount(),
+            PowerGrid::header()->showSearchInput(),
+            PowerGrid::footer()->showPerPage()->showRecordCount(),
         ];
     }
 
     public function datasource(): Builder
     {
-        return Projet::query();
+        return Projet::query()
+            ->with(['assurance'])
+            ->withCount('consultations')
+            ->latest('created_at');
     }
 
     public function relationSearch(): array
     {
-        return [];
+        return [
+            'assurance' => ['name', 'reference'],
+        ];
     }
 
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            ->add('id')
-            ->add('name', function ($projet) {
-                return sprintf(
-                    '<div><a href="https://www.google.com/search?q=%s" target="_blank"><b>%s</b></a><br><span class="text-xs text-slate-500">%s</span></div>',
-                    urlencode(e($projet->name)),
-                    e(ucfirst($projet->name)),
-                    e($projet->reference)
+            ->add('row_num', fn () => ++$this->rowCounter)
+            ->add('name_export', fn (Projet $projet) => $projet->name)
+            ->add('projet', function (Projet $projet) {
+                return Blade::render(
+                    '<div class="space-y-1">
+                        <a href="{{ route(\'settings.projet.show\', $projet->id) }}" wire:navigate
+                            class="font-bold tracking-tight text-slate-900 hover:text-sky-600 dark:text-white dark:hover:text-sky-300">
+                            {{ $projet->name }}
+                        </a>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ $projet->reference ?: \'—\' }}</p>
+                    </div>',
+                    ['projet' => $projet]
                 );
             })
-            ->add('description', function ($projet) {
-                return str(e(ucfirst($projet->description ?? 'N/A')))->words(8);
+            ->add('assurance_label', function (Projet $projet) {
+                if (! $projet->assurance) {
+                    return Blade::render('<span class="text-xs text-amber-600 dark:text-amber-300">Non renseignee</span>');
+                }
+
+                return Blade::render(
+                    '<div class="space-y-1">
+                        <p class="font-semibold text-slate-900 dark:text-white">{{ $assurance->name }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ $assurance->reference ?: \'—\' }}</p>
+                    </div>',
+                    ['assurance' => $projet->assurance]
+                );
             })
-            ->add('created_at_formatted', fn(Projet $model) => Carbon::parse($model->created_at)->format('d/m/Y H:i:s'));
+            ->add('description_label', fn (Projet $projet) => str($projet->description ?: '—')->limit(80))
+            ->add('consultations_count_label', fn (Projet $projet) => (int) $projet->consultations_count)
+            ->add('created_at_label', fn (Projet $projet) => optional($projet->created_at)->format('d/m/Y H:i'))
+            ->add('action', function (Projet $projet) {
+                return Blade::render(
+                    '<a href="{{ route(\'settings.projet.show\', $projet->id) }}" wire:navigate
+                        class="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
+                        Voir detail
+                    </a>',
+                    ['projet' => $projet]
+                );
+            });
     }
 
     public function columns(): array
     {
         return [
-            Column::make('Id', 'id'),
-            Column::make('Projet', 'name', 'name')
+            Column::make('#', 'row_num')->bodyAttribute('text-xs font-semibold text-center w-10'),
+            Column::make('Projet', 'projet', 'name_export')
                 ->sortable()
-                ->searchable(),
-            Column::make('Description', 'description')
+                ->searchable()
+                ->bodyAttribute('text-xs'),
+            Column::make('Assurance', 'assurance_label')
                 ->sortable()
-                ->searchable(),
-
-            // Column::make('Created at', 'created_at_formatted', 'created_at')
-            //     ->sortable(),
-
-            Column::action('Action')
-                ->bodyAttribute('flex justify-end items-center')
+                ->searchable()
+                ->bodyAttribute('text-xs'),
+            Column::make('Description', 'description_label', 'description')
+                ->sortable()
+                ->searchable()
+                ->bodyAttribute('text-xs'),
+            Column::make('Consultations', 'consultations_count_label', 'consultations_count')
+                ->sortable()
+                ->bodyAttribute('text-xs text-center'),
+            Column::make('Cree le', 'created_at_label', 'created_at')
+                ->sortable()
+                ->bodyAttribute('text-xs'),
+            Column::make('Action', 'action')
+                ->bodyAttribute('text-xs text-right'),
         ];
     }
 
@@ -82,33 +118,4 @@ final class ProjetTable extends PowerGridComponent
             Filter::datetimepicker('created_at'),
         ];
     }
-
-    #[\Livewire\Attributes\On('edit')]
-    public function edit($rowId): void
-    {
-        $this->js('alert(' . $rowId . ')');
-    }
-
-    public function actions(Projet $row): array
-    {
-        return [
-            Button::add('edit')
-                ->slot('Statistiques')
-                ->id()
-                ->class('pg-btn-white dark:ring-pg-primary-600 dark:border-pg-primary-600 dark:hover:bg-pg-primary-700 dark:ring-offset-pg-primary-800 dark:text-pg-primary-300 dark:bg-pg-primary-700')
-                ->dispatch('edit', ['rowId' => $row->id])
-        ];
-    }
-
-    /*
-    public function actionRules($row): array
-    {
-       return [
-            // Hide button edit for ID 1
-            Rule::button('edit')
-                ->when(fn($row) => $row->id === 1)
-                ->hide(),
-        ];
-    }
-    */
 }

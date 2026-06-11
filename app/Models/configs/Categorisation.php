@@ -3,6 +3,7 @@
 namespace App\Models\Configs;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Categorisation extends Model
 {
@@ -12,12 +13,16 @@ class Categorisation extends Model
         'description',
     ];
 
-    public function assurances()
+    protected $casts = [
+        'pourcentage' => 'float',
+    ];
+
+    public function assurances(): HasMany
     {
         return $this->hasMany(Assurance::class);
     }
 
-    public function paquets()
+    public function paquets(): HasMany
     {
         return $this->hasMany(PacquetSoin::class);
     }

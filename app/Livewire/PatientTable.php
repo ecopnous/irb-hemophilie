@@ -21,9 +21,12 @@ final class PatientTable extends PowerGridComponent
     public string $tableName = 'patientTable';
     public bool $deferLoading = true;
     public string $loadingComponent = 'components.table.loading';
+    public int $rowCounter = 0;
 
     public function setUp(): array
     {
+        $this->rowCounter = 0;
+
         return [
             PowerGrid::exportable(fileName: 'dossiers-patients')
                 ->type(Exportable::TYPE_XLS, Exportable::TYPE_CSV),
@@ -64,6 +67,7 @@ final class PatientTable extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
+            ->add('numero', fn () => ++$this->rowCounter)
             ->add('nin')
             ->add('dossier', function (DossierPatient $patient) {
                 return Blade::render(
@@ -158,6 +162,10 @@ final class PatientTable extends PowerGridComponent
     public function columns(): array
     {
         return [
+            Column::make('#', 'numero')
+                ->visibleInExport(false)
+                ->bodyAttribute('text-xs font-semibold text-center w-10'),
+
             Column::make('Dossier', 'dossier')
                 ->bodyAttribute('text-xs')
                 ->visibleInExport(false),

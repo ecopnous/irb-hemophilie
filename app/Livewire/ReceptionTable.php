@@ -15,6 +15,7 @@ use PowerComponents\LivewirePowerGrid\PowerGridComponent;
 final class ReceptionTable extends PowerGridComponent
 {
     public string $tableName = 'receptionTable';
+    public int $rowCounter = 0;
 
     #[Reactive]
     public string $search = '';
@@ -57,6 +58,7 @@ final class ReceptionTable extends PowerGridComponent
 
     public function setUp(): array
     {
+        $this->rowCounter = 0;
 
         return [
             PowerGrid::footer()
@@ -118,11 +120,16 @@ final class ReceptionTable extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
+            ->add('numero', fn () => ++$this->rowCounter)
             ->add('reference', function ($consultation) {
                 return Blade::render('<div class="space-y-1">
                         @if($consultation->is_visite_program)
                             <p class="font-bold tracking-tight text-blue-600 dark:text-blue-300">
                                 Rendez-Vous
+                            </p>
+                        @elseif($consultation->type === "depistage")
+                            <p class="font-bold tracking-tight text-green-600 dark:text-green-300">
+                                Examen
                             </p>
                         @else
                             <p class="font-bold tracking-tight text-slate-900 dark:text-white">
@@ -272,6 +279,9 @@ final class ReceptionTable extends PowerGridComponent
     public function columns(): array
     {
         return [
+            Column::make('#', 'numero')
+                ->bodyAttribute('text-xs font-semibold text-center w-10'),
+
             Column::make('Reference', 'reference')
                 ->bodyAttribute('text-xs')
                 ->sortable()

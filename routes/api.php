@@ -7,9 +7,12 @@ use App\Models\Configs\Departement;
 use App\Models\Configs\PacquetSoin;
 use App\Models\Configs\Projet;
 use App\Models\Configs\Service;
+use App\Models\Consultation;
 use App\Models\DossierPatient;
+use App\Models\prescription\Prescription;
 use App\Models\facturation\FinanceClient;
 use App\Models\prescription\Medicament;
+use App\Models\prescription\Pharmacie;
 use App\Models\Localisations\Country;
 use App\Models\Localisations\Province;
 use App\Models\other\Symptome;
@@ -125,6 +128,154 @@ Route::name('api.')->group(function () {
                 ];
             });
     })->name('medicaments');
+
+    Route::get('/consultations', function (Request $request) {
+        $hopitalId = (int) ($request->hopital_id ?: current_hopital_id());
+
+        if ($hopitalId <= 0) {
+            return response()->json([]);
+        }
+
+        $term = $request->search;
+
+        return Consultation::query()
+            ->with('dossierPatient')
+            ->where('hopital_id', $hopitalId)
+            ->when($term, function ($q) use ($term) {
+                $like = '%' . $term . '%';
+                $q->where(function ($inner) use ($like) {
+                    $inner->where('reference', 'like', $like)
+                        ->orWhereHas('dossierPatient', function ($patient) use ($like) {
+                            $patient->where('nom', 'like', $like)
+                                ->orWhere('postnom', 'like', $like)
+                                ->orWhere('prenom', 'like', $like)
+                                ->orWhere('nin', 'like', $like);
+                        });
+                });
+            })
+            ->latest('created_at')
+            ->limit(40)
+            ->get()
+            ->map(fn (Consultation $consultation) => [
+                'id' => $consultation->id,
+                'name' => $consultation->reference . ' — ' . ($consultation->dossierPatient?->full_name ?? 'Patient'),
+                'description' => optional($consultation->created_at)->format('d/m/Y H:i'),
+            ])
+            ->values();
+    })->name('consultations');
+
+    Route::get('/prescriptions-pending', function (Request $request) {
+        $hopitalId = (int) ($request->hopital_id ?: current_hopital_id());
+
+        if ($hopitalId <= 0) {
+            return response()->json([]);
+        }
+
+        $term = $request->search;
+
+        return Prescription::query()
+            ->with(['dossierPatient', 'medicaments'])
+            ->where('hopital_id', $hopitalId)
+            ->whereIn('status', ['draft', 'partial'])
+            ->when($term, function ($q) use ($term) {
+                $like = '%' . $term . '%';
+                $q->where(function ($inner) use ($like) {
+                    $inner->where('reference', 'like', $like)
+                        ->orWhereHas('dossierPatient', function ($patient) use ($like) {
+                            $patient->where('nom', 'like', $like)
+                                ->orWhere('postnom', 'like', $like)
+                                ->orWhere('prenom', 'like', $like);
+                        });
+                });
+            })
+            ->latest('created_at')
+            ->limit(40)
+            ->get()
+            ->map(function (Prescription $prescription) {
+                $remaining = $prescription->medicaments->sum(
+                    fn ($medicament) => max(0, (int) $medicament->pivot->nbr - (int) $medicament->pivot->qte_servie)
+                );
+
+                return [
+                    'id' => $prescription->id,
+                    'name' => ($prescription->reference ?: 'PRES-' . $prescription->id)
+                        . ' — ' . ($prescription->dossierPatient?->full_name ?? 'Patient'),
+                    'description' => $remaining . ' unite(s) a servir · ' . optional($prescription->created_at)->format('d/m/Y H:i'),
+                ];
+            })
+            ->values();
+    })->name('prescriptions-pending');
+
+    Route::get('/pharmacies', function (Request $request) {
+        $hopitalId = (int) ($request->hopital_id ?: current_hopital_id());
+
+        if ($hopitalId <= 0) {
+            return response()->json([]);
+        }
+
+        $term = $request->search;
+
+        return Pharmacie::query()
+            ->where('hopital_id', $hopitalId)
+            ->where(function ($q) {
+                $q->where('is_active', true)->orWhereNull('is_active');
+            })
+            ->when($term, fn ($q) => $q->where('nom', 'like', '%' . $term . '%'))
+            ->orderBy('nom')
+            ->limit(50)
+            ->get(['id', 'nom'])
+            ->map(fn (Pharmacie $pharmacie) => [
+                'id' => $pharmacie->id,
+                'name' => $pharmacie->nom,
+            ])
+            ->values();
+    })->name('pharmacies');
+
+    Route::get('/pharmacy-medicaments', function (Request $request) {
+        $hopitalId = (int) ($request->hopital_id ?: current_hopital_id());
+        $pharmacieId = (int) $request->input('pharmacie_id');
+
+        if ($hopitalId <= 0 || $pharmacieId <= 0) {
+            return response()->json([]);
+        }
+
+        $pharmacie = Pharmacie::query()
+            ->where('hopital_id', $hopitalId)
+            ->find($pharmacieId);
+
+        if (! $pharmacie) {
+            return response()->json([]);
+        }
+
+        $term = $request->search;
+
+        return $pharmacie->medicaments()
+            ->when($term, function ($q) use ($term) {
+                $like = '%' . $term . '%';
+                $q->where(function ($inner) use ($like) {
+                    $inner->where('medicaments.name', 'like', $like)
+                        ->orWhere('medicaments.reference', 'like', $like)
+                        ->orWhere('medicaments.dci', 'like', $like);
+                });
+            })
+            ->orderBy('medicaments.name')
+            ->limit(50)
+            ->get()
+            ->map(function (Medicament $medicament) {
+                $stock = (int) $medicament->pivot->quantiter;
+
+                return [
+                    'id' => $medicament->id,
+                    'name' => $medicament->name,
+                    'description' => collect([
+                        $medicament->reference,
+                        'Stock: ' . $stock,
+                    ])->filter()->implode(' · '),
+                    'stock' => $stock,
+                ];
+            })
+            ->values();
+    })->name('pharmacy-medicaments');
 
     Route::prefix('configs')->group(function () {
         // retourne les utilisateurs (corps medical) de l'hopital concerner

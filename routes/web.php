@@ -87,6 +87,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('/inventaire/create', 'pages::facturation.inventory')->name('inventory.create');
         Route::livewire('/clients', 'pages::facturation.clients')->name('clients');
         Route::get('/inventaire/rapport/pdf', InventoryReportPdfController::class)->name('inventory.report.pdf');
+
+        Route::prefix('assurance')->name('assurance.')->group(function () {
+            Route::livewire('/', 'pages::facturation.assurance.index')->name('index');
+            Route::livewire('/{id}', 'pages::facturation.assurance.show')->name('show');
+            Route::livewire('/{id}/facture', 'pages::facturation.assurance.invoice')->name('invoice');
+        });
     });
 
     Route::prefix('imagerie')->name('imagerie.')->group(function () {

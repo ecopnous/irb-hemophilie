@@ -13,9 +13,12 @@ use PowerComponents\LivewirePowerGrid\PowerGridFields;
 final class PharmacyPrescriptionTable extends PowerGridComponent
 {
     public string $tableName = 'pharmacyPrescriptionTable';
+    public int $rowCounter = 0;
 
     public function setUp(): array
     {
+        $this->rowCounter = 0;
+
         return [
             PowerGrid::header()->showToggleColumns()->showSearchInput(),
             PowerGrid::footer()->showPerPage()->showRecordCount(),
@@ -42,7 +45,7 @@ final class PharmacyPrescriptionTable extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            ->add('id')
+            ->add('row_num', fn () => ++$this->rowCounter)
             ->add('numero', fn(Prescription $p) => $p->reference ?: ('PRES-' . $p->id))
             ->add('patient', fn(Prescription $p) => $p->dossierPatient?->full_name ?: '-')
             ->add('prescripteur', fn(Prescription $p) => $p->consultation?->user?->name ?: '-')
@@ -64,7 +67,7 @@ final class PharmacyPrescriptionTable extends PowerGridComponent
     public function columns(): array
     {
         return [
-            Column::make('#', 'id')->bodyAttribute('text-xs'),
+            Column::make('#', 'row_num')->bodyAttribute('text-xs font-semibold text-center w-10'),
             Column::make('Numero', 'numero')->sortable()->searchable()->bodyAttribute('text-xs font-semibold'),
             Column::make('Patient', 'patient')->sortable()->searchable()->bodyAttribute('text-xs'),
             Column::make('Prescripteur', 'prescripteur')->sortable()->searchable()->bodyAttribute('text-xs'),
