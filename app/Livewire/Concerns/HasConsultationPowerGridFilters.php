@@ -2,10 +2,8 @@
 
 namespace App\Livewire\Concerns;
 
-use App\Models\Configs\Departement;
-use App\Models\Configs\Projet;
-use App\Models\User;
 use App\Support\AgeBrackets;
+use App\Support\PowerGridFilterCache;
 use Illuminate\Database\Eloquent\Builder;
 use PowerComponents\LivewirePowerGrid\Facades\Filter;
 
@@ -33,17 +31,17 @@ trait HasConsultationPowerGridFilters
 
             Filter::select('type', 'type')
                 ->dataSource(collect([
-                    ['id' => 'consultation', 'name' => 'Consultation'],
-                    ['id' => 'depistage', 'name' => 'Depistage'],
+                    ['id' => 'visite', 'name' => 'Visite'],
+                    ['id' => 'examen', 'name' => 'Examen'],
                 ]))
                 ->optionValue('id')
                 ->optionLabel('name'),
 
-            Filter::select('type_fichier', 'type_fichier')
+            Filter::select('type_visite', 'type_visite')
                 ->dataSource(collect([
                     ['id' => 'standard', 'name' => 'Standard'],
-                    ['id' => 'hemophile', 'name' => 'Hemophile'],
-                    ['id' => 'redac', 'name' => 'Redac'],
+                    ['id' => 'hémophilie', 'name' => 'Hémophilie'],
+                    ['id' => 'drépanocytose', 'name' => 'Drépanocytose'],
                 ]))
                 ->optionValue('id')
                 ->optionLabel('name'),
@@ -70,16 +68,12 @@ trait HasConsultationPowerGridFilters
                 )),
 
             Filter::select('departement_id', 'departement_id')
-                ->dataSource(
-                    Departement::query()->orderBy('name')->get(['id', 'name'])
-                )
+                ->dataSource(PowerGridFilterCache::departements())
                 ->optionValue('id')
                 ->optionLabel('name'),
 
             Filter::select('projet_id', 'projet_id')
-                ->dataSource(
-                    Projet::query()->orderBy('name')->get(['id', 'name'])
-                )
+                ->dataSource(PowerGridFilterCache::projets())
                 ->optionValue('id')
                 ->optionLabel('name'),
 
@@ -87,12 +81,7 @@ trait HasConsultationPowerGridFilters
                 ->operators(['contains']),
 
             Filter::select('user_id', 'user_id')
-                ->dataSource(
-                    User::query()
-                        ->when($hopitalId, fn ($query) => $query->where('hopital_id', $hopitalId))
-                        ->orderBy('name')
-                        ->get(['id', 'name'])
-                )
+                ->dataSource(PowerGridFilterCache::users($hopitalId))
                 ->optionValue('id')
                 ->optionLabel('name'),
 

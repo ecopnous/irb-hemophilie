@@ -2,10 +2,8 @@
 
 namespace App\Livewire\Concerns;
 
-use App\Models\Configs\Assurance;
-use App\Models\other\Tag;
-use App\Models\User;
 use App\Support\AgeBrackets;
+use App\Support\PowerGridFilterCache;
 use Illuminate\Database\Eloquent\Builder;
 use PowerComponents\LivewirePowerGrid\Facades\Filter;
 
@@ -40,12 +38,12 @@ trait HasPatientPowerGridFilters
                 ->builder(fn (Builder $query, string $value) => AgeBrackets::apply($query, $value)),
 
             Filter::select('assurance_id', 'assurance_id')
-                ->dataSource(Assurance::query()->orderBy('name')->get(['id', 'name']))
+                ->dataSource(PowerGridFilterCache::assurances())
                 ->optionValue('id')
                 ->optionLabel('name'),
 
             Filter::select('tag_id', 'tag_id')
-                ->dataSource(Tag::query()->orderBy('name')->get(['id', 'name']))
+                ->dataSource(PowerGridFilterCache::tags())
                 ->optionValue('id')
                 ->optionLabel('name')
                 ->builder(fn (Builder $query, string $value) => $query->whereHas(
@@ -64,12 +62,7 @@ trait HasPatientPowerGridFilters
                 ->optionLabel('name'),
 
             Filter::select('user_id', 'user_id')
-                ->dataSource(
-                    User::query()
-                        ->when($hopitalId, fn ($query) => $query->where('hopital_id', $hopitalId))
-                        ->orderBy('name')
-                        ->get(['id', 'name'])
-                )
+                ->dataSource(PowerGridFilterCache::users($hopitalId))
                 ->optionValue('id')
                 ->optionLabel('name'),
 

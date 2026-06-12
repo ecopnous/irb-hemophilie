@@ -57,7 +57,7 @@ final class HistoriqueConsult extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            ->add('type_fichier', fn($consultation) => ucfirst($consultation->type_fichier ?? '-'))
+            ->add('type_visite', fn($consultation) => ucfirst($consultation->type_visite ?? '-'))
             ->add('temperature', fn($consultation) => $consultation->temperature === null ? '-' : $consultation->temperature . '°C')
             ->add('poids', fn($consultation) => $consultation->poids === null ? '-' : $consultation->poids . ' kg')
             ->add('reference', function ($consultation) {
@@ -130,7 +130,7 @@ final class HistoriqueConsult extends PowerGridComponent
             ->add('prenom_export', fn($consultation) => Str::lower($consultation->dossierPatient?->prenom))
             ->add('genre_export', fn($consultation) => Str::lower($consultation->dossierPatient?->genre))
             ->add('age_export', fn($consultation) => Str::lower($consultation->dossierPatient?->age))
-            ->add('type_fichier_export', fn($consultation) => Str::lower($consultation->type_fichier))
+            ->add('type_visite_export', fn($consultation) => Str::lower($consultation->type_visite))
             ->add('temperature_export', fn($consultation) => Str::lower($consultation->temperature))
             ->add('poids_export', fn($consultation) => Str::lower($consultation->poids))
             ->add('departement_export', fn($consultation) => Str::lower($consultation->departement?->name))
@@ -154,7 +154,7 @@ final class HistoriqueConsult extends PowerGridComponent
                 ->sortable()
                 ->searchable(),
 
-            Column::make('Type Fiche', 'type_fichier')
+            Column::make('Type Fiche', 'type_visite')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
                 ->sortable()
@@ -204,7 +204,7 @@ final class HistoriqueConsult extends PowerGridComponent
             Column::make('Prénom', 'prenom_export')->visibleInExport(true)->hidden(),
             Column::make('Genre', 'genre_export')->visibleInExport(true)->hidden(),
             Column::make('Age', 'age_export')->visibleInExport(true)->hidden(),
-            Column::make('Type Fiche', 'type_fichier_export')->visibleInExport(true)->hidden(),
+            Column::make('Type Fiche', 'type_visite_export')->visibleInExport(true)->hidden(),
             Column::make('Temperature', 'temperature_export')->visibleInExport(true)->hidden(),
             Column::make('Poids', 'poids_export')->visibleInExport(true)->hidden(),
             Column::make('Département', 'departement_export')->visibleInExport(true)->hidden(),

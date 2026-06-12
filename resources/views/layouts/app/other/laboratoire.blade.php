@@ -10,7 +10,7 @@
             <flux:sidebar.item icon="tags" href="{{ route('laboratoire.valeurs_exactes') }}" wire:navigate>
                 Valeurs exacts
             </flux:sidebar.item>
-            <flux:sidebar.item icon="panels-left-bottom" href="#" wire:navigate>
+            <flux:sidebar.item icon="panels-left-bottom" href="{{ route('laboratoire.groupes.index') }}" wire:navigate>
                 Groupes d'examens
             </flux:sidebar.item>
         </flux:sidebar.nav>

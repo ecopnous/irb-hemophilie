@@ -32,7 +32,7 @@ class Consultation extends Model
 
     protected $fillable = [
         'type', //*
-        'type_fichier', //*
+        'type_visite', //*
         'is_project_period',
         'is_visite_program',
         'consultation_source_id',
@@ -213,12 +213,15 @@ class Consultation extends Model
     }
     public function scopeToDay(Builder $query): Builder
     {
-        return $query->whereDate('created_at', Carbon::today());
+        return $query->whereBetween('created_at', [
+            Carbon::today()->startOfDay(),
+            Carbon::today()->endOfDay(),
+        ]);
     }
 
     public function scopeOldDays(Builder $query, int $nbr_day): Builder
     {
-        return $query->whereDate('created_at', '>=', now()->subDays(30));
+        return $query->where('created_at', '>=', now()->subDays($nbr_day)->startOfDay());
     }
     public function scopeThisHopital(Builder $query): Builder
     {
@@ -226,7 +229,7 @@ class Consultation extends Model
     }
     public function scopeOld(Builder $query): Builder
     {
-        return $query->whereDate('created_at', '<=', today());
+        return $query->where('created_at', '<=', today()->endOfDay());
     }
 
 

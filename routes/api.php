@@ -350,6 +350,15 @@ Route::name('api.')->group(function () {
                 ->get(['id', 'name']);
         })->name('pacquetSoins');
 
+        Route::get('/groupe-examens', function (Request $request) {
+            return \App\Models\Configs\GroupeExamen::query()
+                ->active()
+                ->has('actes')
+                ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%"))
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        })->name('groupeExamens');
+
         Route::get('/departements', function (Request $request) {
             return Departement::all(['id', 'name']);
         })->name('departements');

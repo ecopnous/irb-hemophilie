@@ -17,8 +17,8 @@ use Livewire\Component;
 
 new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public $patient;
-    public $type;
-    public string $type_fiche = 'standard';
+    public string $type = 'consultation';
+    public string $type_visite = 'standard';
     public ?string $depistage_target = null;
     public $departement_id;
     public $service_id;
@@ -27,6 +27,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public $assurance_id;
     public $projet_id;
     public $pacquet_soin_id;
+    /** @var \Illuminate\Support\Collection<int, \App\Models\Configs\Acte> */
+    public $paquetActes;
     public bool $use_project_period = true;
     public bool $new_visite = false;
     public $next_visit_date = null;
@@ -40,6 +42,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
         $this->patient = DossierPatient::findOrFail($id);
         $this->date_consultation = today()->format('Y-m-d');
+        $this->paquetActes = collect();
     }
 
     protected function resolvedConsultationDate(): \Carbon\CarbonInterface
@@ -62,7 +65,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
     public function updatedType($value): void
     {
-        $this->reset(['departement_id', 'service_id', 'acte_ids', 'user_ids', 'ref', 'depistage_target', 'pacquet_soin_id', 'use_project_period', 'new_visite', 'next_visit_date', 'next_visit_time']);
+        $this->reset(['departement_id', 'service_id', 'acte_ids', 'user_ids', 'ref', 'depistage_target', 'pacquet_soin_id', 'paquetActes', 'use_project_period', 'new_visite', 'next_visit_date', 'next_visit_time']);
 
         if ($this->isDepistageType($value)) {
             $this->depistage_target = 'laboratoire';
@@ -78,7 +81,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
     public function updatedDepistageTarget(): void
     {
-        $this->reset(['acte_ids', 'pacquet_soin_id', 'departement_id', 'service_id', 'ref']);
+        $this->reset(['acte_ids', 'pacquet_soin_id', 'paquetActes', 'departement_id', 'service_id', 'ref']);
         $this->applyDepistageTargetDefaults();
     }
 
@@ -87,15 +90,17 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         if (!$value) {
             $this->acte_ids = [];
             $this->ref = '';
+            $this->paquetActes = collect();
 
             return;
         }
 
         $paquet = PacquetSoin::query()
-            ->with(['actes.departement'])
+            ->with(['actes.departement', 'actes.service'])
             ->find($value);
 
-        $this->acte_ids = $paquet?->actes->pluck('id')->map(fn($id) => (string) $id)->all() ?? [];
+        $this->paquetActes = $paquet?->actes ?? collect();
+        $this->acte_ids = $this->paquetActes->pluck('id')->map(fn($id) => (string) $id)->all();
         $this->syncDepistageReferenceFromActes();
     }
 
@@ -313,8 +318,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
         $upcomingQuery = $this->openProgrammedConsultations(
             $this->patientProgrammedConsultations()
-                ->whereDate('created_at', '>=', $today)
-                ->whereDate('created_at', '<=', $today->copy()->addDays(14))
+                ->whereBetween('created_at', [$today->copy()->startOfDay(), $today->copy()->addDays(14)->endOfDay()])
                 ->orderBy('created_at'),
         );
 
@@ -335,7 +339,11 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             ];
         }
 
-        $overdueQuery = $this->openProgrammedConsultations($this->patientProgrammedConsultations()->whereDate('created_at', '<', $today)->orderByDesc('created_at'));
+        $overdueQuery = $this->openProgrammedConsultations(
+            $this->patientProgrammedConsultations()
+                ->where('created_at', '<', $today->copy()->startOfDay())
+                ->orderByDesc('created_at')
+        );
 
         $overdueVisit = (clone $overdueQuery)->first();
         $overdueCount = (clone $overdueQuery)->count();
@@ -362,7 +370,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $validated = $this->validate(
             [
                 'type' => 'required|in:consultation,depistage',
-                'type_fiche' => 'required|in:standard,hémophilie,drépanocytose',
+                'type_visite' => 'required|in:standard,hémophilie,drépanocytose',
                 'depistage_target' => $this->isDepistageType() ? 'required|in:laboratoire,imagerie,pacquet_soins' : 'nullable',
                 'departement_id' => $this->isConsultationType() ? 'required|exists:departements,id' : 'nullable',
                 'assurance_id' => 'nullable|exists:assurances,id',
@@ -409,7 +417,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             $consultation = Consultation::createWithPeriodContext(
                 [
                     'type' => $validated['type'],
-                    'type_fichier' => $validated['type_fiche'],
+                    'type_visite' => $validated['type_visite'],
                     'dossier_patient_id' => $this->patient->id,
                     'departement_id' => $this->resolvedDepartementId(),
                     'projet_id' => $validated['projet_id'] ?? null,
@@ -486,7 +494,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 $programmedConsultation = Consultation::createWithPeriodContext(
                     [
                         'type' => 'consultation',
-                        'type_fichier' => $validated['type_fiche'],
+                        'type_visite' => $validated['type_visite'],
                         'dossier_patient_id' => $this->patient->id,
                         'departement_id' => $this->resolvedDepartementId(),
                         'projet_id' => $validated['projet_id'] ?? null,
@@ -519,141 +527,273 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             return $consultation;
         });
 
-        $this->redirect(route('consultation.prelevement', $consultation->id), navigate: true);
+        $redirectUrl = $this->isConsultationType()
+            ? route('consultation.prelevement', $consultation->id)
+            : route('dashboard');
+
+        $this->redirect($redirectUrl, navigate: true);
     }
 };
 ?>
 
-<div class="transition-colors duration-300">
+@php
+    $typeFichierLabels = [
+        'standard' => 'Standard',
+        'hémophilie' => 'Hémophilie',
+        'drépanocytose' => 'Drépanocytose',
+    ];
+@endphp
+
+<div class="mx-auto max-w-7xl space-y-6 pb-28 transition-colors duration-300">
     <x-patient.patient-profil-header :nav="[
         ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
         ['label' => 'Dossiers patients', 'link' => 'patient.index', 'icon' => 'folder'],
         ['label' => $patient->nin, 'link' => route('patient.show', $patient->id), 'icon' => 'identification'],
-        ['label' => 'Nouvelle consultation', 'icon' => 'document'],
+        ['label' => 'Nouvelle prise en charge', 'icon' => 'document'],
     ]" :patient="$patient" :current_patient="$patient->id">
-        <x-slot name="title">Nouvelle consultation</x-slot>
+        <x-slot name="title">Ouvrir une prise en charge</x-slot>
         <x-slot name="subtitle">{{ ucfirst($patient->nom) }} {{ ucfirst($patient->postnom) }}
-            {{ ucfirst($patient->prenom) }}</x-slot>
+            {{ ucfirst($patient->prenom) }} · {{ $patient->genre }} · {{ $patient->age }}</x-slot>
     </x-patient.patient-profil-header>
 
-    <div class="max-w-7xl mx-auto">
-        <x-card header="Choisir le type de consultation" loading>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <x-select.styled label="Type de consultation *" wire:model.live="type" placeholder="Choisir..." required
-                    :options="[
-                        ['label' => 'Visite', 'value' => 'consultation'],
-                        ['label' => 'Examen', 'value' => 'depistage'],
-                    ]" />
-                <x-select.styled label="Type de la visite *" wire:model.live="type_fiche" placeholder="Choisir..."
+    {{-- Bandeau patient --}}
+    <section
+        class="flex flex-col gap-4 overflow-hidden rounded-4xl border border-indigo-100 bg-linear-to-br from-white via-indigo-50/50 to-slate-50 px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+        <div class="flex items-center gap-4">
+            <div
+                class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-lg font-black text-white shadow-md">
+                @if ($patient->photo_url)
+                    <img src="{{ $patient->photo_url }}" alt="{{ $patient->full_name }}"
+                        class="size-full object-cover" />
+                @else
+                    {{ strtoupper(substr($patient->prenom ?? 'P', 0, 1) . substr($patient->nom ?? 'X', 0, 1)) }}
+                @endif
+            </div>
+            <div class="min-w-0">
+                <p class="truncate text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                    {{ $patient->full_name }}
+                </p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    NIN {{ $patient->nin }}{{ $patient->ins ? ' · INS ' . $patient->ins : '' }}
+                </p>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <span
+                class="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 dark:border-indigo-500/30 dark:bg-slate-900/60 dark:text-indigo-300">
+                <flux:icon.calendar-days class="size-3.5" />
+                {{ today()->format('d/m/Y') }}
+            </span>
+            <span
+                class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+                <flux:icon.building-office-2 class="size-3.5" />
+                {{ current_hopital_nom() }}
+            </span>
+        </div>
+    </section>
+
+    {{-- Étape 1 : nature & contexte --}}
+    <section
+        class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+        <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+            <div class="flex items-center gap-3">
+                <div
+                    class="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+                    <flux:icon.clipboard-document-list class="size-5" />
+                </div>
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Étape 1</p>
+                    <h2 class="text-lg font-black text-slate-900 dark:text-white">Nature de la prise en charge</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6 p-5" wire:loading.class="opacity-60" wire:target="type, depistage_target">
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label @class([
+                    'group relative cursor-pointer overflow-hidden rounded-2xl border-2 p-5 transition',
+                    'border-indigo-500 bg-indigo-50/80 shadow-sm ring-2 ring-indigo-500/20 dark:border-indigo-400 dark:bg-indigo-500/10' => $type === 'consultation',
+                    'border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-indigo-500/40' => $type !== 'consultation',
+                ])>
+                    <input type="radio" wire:model.live="type" value="consultation" class="sr-only" />
+                    <div class="flex items-start gap-4">
+                        <div @class([
+                            'flex size-11 shrink-0 items-center justify-center rounded-xl transition',
+                            'bg-indigo-500 text-white' => $type === 'consultation',
+                            'bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-400' => $type !== 'consultation',
+                        ])>
+                            <flux:icon.user-circle class="size-6" />
+                        </div>
+                        <div>
+                            <p class="text-base font-black text-slate-900 dark:text-white">Visite</p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                Consultation médicale, orientation vers un service et suivi clinique.
+                            </p>
+                        </div>
+                    </div>
+                </label>
+
+                <label @class([
+                    'group relative cursor-pointer overflow-hidden rounded-2xl border-2 p-5 transition',
+                    'border-violet-500 bg-violet-50/80 shadow-sm ring-2 ring-violet-500/20 dark:border-violet-400 dark:bg-violet-500/10' => $type === 'depistage',
+                    'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/30 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-violet-500/40' => $type !== 'depistage',
+                ])>
+                    <input type="radio" wire:model.live="type" value="depistage" class="sr-only" />
+                    <div class="flex items-start gap-4">
+                        <div @class([
+                            'flex size-11 shrink-0 items-center justify-center rounded-xl transition',
+                            'bg-violet-500 text-white' => $type === 'depistage',
+                            'bg-slate-100 text-slate-500 group-hover:bg-violet-100 group-hover:text-violet-600 dark:bg-slate-800 dark:text-slate-400' => $type !== 'depistage',
+                        ])>
+                            <flux:icon.beaker class="size-6" />
+                        </div>
+                        <div>
+                            <p class="text-base font-black text-slate-900 dark:text-white">Examen</p>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                Dépistage labo, imagerie ou paquet de soins sans visite complète.
+                            </p>
+                        </div>
+                    </div>
+                </label>
+            </div>
+
+            <div class="grid gap-4 border-t border-slate-100 pt-5 dark:border-slate-800 sm:grid-cols-2">
+                <x-select.styled label="Type de la visite *" wire:model.live="type_visite" placeholder="Choisir..."
                     required :options="[
                         ['label' => 'Standard', 'value' => 'standard'],
-                        ['label' => 'drépanocytose', 'value' => 'hémophilie'],
-                        ['label' => 'drépanocytose', 'value' => 'drépanocytose'],
+                        ['label' => 'Hémophilie', 'value' => 'hémophilie'],
+                        ['label' => 'Drépanocytose', 'value' => 'drépanocytose'],
                     ]" />
-                <x-date label="Date de la consultation" wire:model="date_consultation"
+                <x-date label="Date de la prise en charge" wire:model="date_consultation"
                     placeholder="Aujourd'hui par défaut" :max="today()->format('Y-m-d')" />
             </div>
-        </x-card>
+        </div>
+    </section>
 
-        <div class="mt-8">
-            @if ($this->programmedVisitNotices !== [])
-                <div class="mb-6 space-y-4">
-                    @foreach ($this->programmedVisitNotices as $notice)
-                        <div
-                            class="rounded-3xl border p-5 shadow-sm {{ $notice['tone'] === 'amber' ? 'border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/10' : 'border-sky-200 bg-sky-50/80 dark:border-sky-500/20 dark:bg-sky-500/10' }}">
-                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div class="space-y-2">
-                                    <p
-                                        class="text-xs font-black uppercase tracking-[0.22em] {{ $notice['tone'] === 'amber' ? 'text-amber-700 dark:text-amber-300' : 'text-sky-700 dark:text-sky-300' }}">
-                                        Alerte de suivi
-                                    </p>
-                                    <h3
-                                        class="text-base font-black {{ $notice['tone'] === 'amber' ? 'text-amber-950 dark:text-amber-100' : 'text-sky-950 dark:text-sky-100' }}">
-                                        {{ $notice['title'] }}
-                                    </h3>
-                                    <p
-                                        class="max-w-3xl text-sm leading-6 {{ $notice['tone'] === 'amber' ? 'text-amber-900/90 dark:text-amber-100/90' : 'text-sky-900/90 dark:text-sky-100/90' }}">
-                                        {{ $notice['message'] }}
-                                    </p>
-                                    <p
-                                        class="text-xs {{ $notice['tone'] === 'amber' ? 'text-amber-800/80 dark:text-amber-200/80' : 'text-sky-800/80 dark:text-sky-200/80' }}">
-                                        {{ $notice['supporting'] }}
-                                    </p>
-                                </div>
-
-                                <div class="flex shrink-0 items-center">
-                                    <a href="{{ $notice['action_url'] }}" wire:navigate
-                                        class="inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-bold transition {{ $notice['tone'] === 'amber' ? 'border-amber-300 bg-white text-amber-800 hover:border-amber-400 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-slate-950/40 dark:text-amber-200 dark:hover:bg-amber-500/20' : 'border-sky-300 bg-white text-sky-800 hover:border-sky-400 hover:bg-sky-100 dark:border-sky-400/30 dark:bg-slate-950/40 dark:text-sky-200 dark:hover:bg-sky-500/20' }}">
-                                        {{ $notice['action_label'] }}
-                                    </a>
-                                </div>
+    @if ($this->programmedVisitNotices !== [])
+        <div class="space-y-4">
+            @foreach ($this->programmedVisitNotices as $notice)
+                <div
+                    class="overflow-hidden rounded-2xl border shadow-sm {{ $notice['tone'] === 'amber' ? 'border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/10' : 'border-sky-200 bg-sky-50/80 dark:border-sky-500/20 dark:bg-sky-500/10' }}">
+                    <div class="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="flex gap-4">
+                            <div @class([
+                                'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                                'bg-amber-200 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200' => $notice['tone'] === 'amber',
+                                'bg-sky-200 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200' => $notice['tone'] !== 'amber',
+                            ])>
+                                <flux:icon.bell-alert class="size-5" />
+                            </div>
+                            <div class="space-y-1">
+                                <p @class([
+                                    'text-[11px] font-black uppercase tracking-[0.2em]',
+                                    'text-amber-700 dark:text-amber-300' => $notice['tone'] === 'amber',
+                                    'text-sky-700 dark:text-sky-300' => $notice['tone'] !== 'amber',
+                                ])>
+                                    Alerte de suivi
+                                </p>
+                                <h3 class="text-base font-black text-slate-900 dark:text-white">{{ $notice['title'] }}
+                                </h3>
+                                <p class="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                    {{ $notice['message'] }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ $notice['supporting'] }}</p>
                             </div>
                         </div>
-                    @endforeach
+                        <a href="{{ $notice['action_url'] }}" wire:navigate
+                            class="inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition {{ $notice['tone'] === 'amber' ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-sky-600 text-white hover:bg-sky-700' }}">
+                            {{ $notice['action_label'] }}
+                        </a>
+                    </div>
                 </div>
-            @endif
+            @endforeach
+        </div>
+    @endif
 
-            @if ($type === 'consultation')
-                <x-card header="Remplir les informations initiales">
-                    <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <x-select.styled label="Departement *" wire:model.live="departement_id" :request="route('api.departements')"
-                            select="label:name|value:id" searchable />
-                        <x-select.styled label="Service" wire:model.live="service_id" :request="['url' => route('api.services'), 'params' => ['departement' => $departement_id]]"
+    @if ($this->isConsultationType())
+        <section
+            class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+            <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="flex size-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                        <flux:icon.building-office-2 class="size-5" />
+                    </div>
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Étape 2</p>
+                        <h2 class="text-lg font-black text-slate-900 dark:text-white">Organisation de la visite</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-8 p-5">
+                <div>
+                    <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Parcours & actes</p>
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <x-select.styled label="Département *" wire:model.live="departement_id"
+                            :request="route('api.departements')" select="label:name|value:id" searchable />
+                        <x-select.styled label="Service" wire:model.live="service_id"
+                            :request="['url' => route('api.services'), 'params' => ['departement' => $departement_id]]"
                             select="label:name|value:id" placeholder="Choisir..." :disabled="!$departement_id" />
-                        <x-select.styled label="Actes a ajouter" wire:model="acte_ids" :request="[
+                        <x-select.styled label="Actes à ajouter" wire:model="acte_ids" :request="[
                             'url' => route('api.actes'),
                             'params' => ['departement' => $departement_id, 'service' => $service_id],
-                        ]"
-                            select="label:name|value:id" multiple />
+                        ]" select="label:name|value:id" multiple />
                     </div>
+                </div>
 
-                    <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <x-select.styled label="Membre de l'equipe" placeholder="Choisir..." wire:model="user_ids"
+                <div>
+                    <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Équipe & prise en
+                        charge</p>
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <x-select.styled label="Membre de l'équipe" placeholder="Choisir..." wire:model="user_ids"
                             :request="[
                                 'url' => route('api.usersIn'),
                                 'params' => ['hopital_id' => current_hopital_id()],
                             ]" select="label:name|value:id" multiple />
                         <x-select.styled label="Prise en charge" placeholder="Choisir..." wire:model="assurance_id"
                             :request="route('api.assurances')" select="label:name|value:id" searchable />
-                        <x-select.styled label="Projet associe a la consultation" placeholder="Choisir ou creer"
-                            wire:model.live="projet_id" :request="route('api.projets')" select="label:name|value:id" searchable />
+                        <x-select.styled label="Projet associé" placeholder="Choisir ou créer"
+                            wire:model.live="projet_id" :request="route('api.projets')" select="label:name|value:id"
+                            searchable />
                     </div>
+                </div>
 
-                    <div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Options avancées</p>
+                    <div class="grid gap-4 md:grid-cols-2">
                         @if ($projet_id)
                             <div
-                                class="mb-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
+                                class="rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 to-white p-4 dark:border-sky-500/20 dark:from-sky-500/10 dark:to-slate-900/40">
                                 <label class="flex items-start gap-3">
                                     <x-toggle wire:model.live="use_project_period" />
                                     <div>
                                         <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Période
                                             automatique au projet</p>
                                         <p class="mt-1 text-xs text-sky-800/80 dark:text-sky-200/80">
-                                            Si cochée, le modele generera automatiquement une periode du type
-                                            lettre-du-projet + numero
-                                            comme `M1`.
+                                            Génère une période type lettre-du-projet + numéro (ex. M1).
                                         </p>
                                     </div>
                                 </label>
                             </div>
                         @endif
-                        <div
-                            class="mb-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                            <label class="flex items-start gap-3 mb-2">
+                        <div @class([
+                            'rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 to-white p-4 dark:border-sky-500/20 dark:from-sky-500/10 dark:to-slate-900/40',
+                            'md:col-span-2' => ! $projet_id,
+                        ])>
+                            <label class="mb-3 flex items-start gap-3">
                                 <x-toggle wire:model.live="new_visite" />
                                 <div>
-                                    <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Programmée
-                                        automatiquement la prochaine visite</p>
+                                    <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Programmer la
+                                        prochaine visite</p>
                                     <p class="mt-1 text-xs text-sky-800/80 dark:text-sky-200/80">
-                                        Si cochée, le modele créera automatiquement la prochaine visite sous une periode
-                                        determinée.
+                                        Crée automatiquement le rendez-vous de suivi sur la période déterminée.
                                     </p>
                                 </div>
                             </label>
                             <flux:icon.loading wire:loading wire:target="new_visite" />
                             <div wire:loading.remove wire:target="new_visite">
                                 @if ($new_visite)
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div class="grid gap-4 border-t border-sky-200/60 pt-4 sm:grid-cols-2 dark:border-sky-500/20">
                                         <x-date wire:model="next_visit_date" label="Date du rendez-vous *"
                                             placeholder="Date de la prochaine visite" :min="today()->format('Y-m-d')" />
                                         <x-input wire:model="next_visit_time" type="time" label="Heure"
@@ -663,103 +803,183 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
+    @endif
 
-                    <div class="flex justify-end">
-                        <flux:button wire:click="save" variant="primary" color="indigo" icon="save">
-                            Enregistrer les informations
-                        </flux:button>
+    @if ($this->isDepistageType())
+        <section
+            class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+            <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="flex size-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+                        <flux:icon.beaker class="size-5" />
                     </div>
-                </x-card>
-            @endif
-
-            @if ($type === 'depistage')
-                <x-card header="Configurer le depistage">
-                    <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <x-select.styled label="Cible du depistage *" wire:model.live="depistage_target"
-                            placeholder="Choisir..." required :options="[
-                                ['label' => 'Laboratoire', 'value' => 'laboratoire'],
-                                ['label' => 'Imagerie', 'value' => 'imagerie'],
-                                ['label' => 'Paquet de soins', 'value' => 'pacquet_soins'],
-                            ]" />
-                        <x-select.styled label="Prise en charge" placeholder="Choisir..." wire:model="assurance_id"
-                            :request="route('api.assurances')" select="label:name|value:id" searchable />
-                        {{-- <x-select.styled label="Projet associe" placeholder="Choisir ou creer"
-                            wire:model.live="projet_id" :request="route('api.projets')" select="label:name|value:id" searchable /> --}}
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Étape 2</p>
+                        <h2 class="text-lg font-black text-slate-900 dark:text-white">Configurer l'examen</h2>
                     </div>
+                </div>
+            </div>
 
-                    @if ($depistage_target === 'laboratoire')
-                        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <x-input label="Departement" :value="$this->laboratoireDepartement()?->name ?? 'Laboratoire'" disabled />
+            <div class="space-y-8 p-5">
+                <div>
+                    <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Type d'examen</p>
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <label @class([
+                            'group cursor-pointer rounded-2xl border-2 p-4 transition',
+                            'border-violet-500 bg-violet-50/80 ring-2 ring-violet-500/20 dark:border-violet-400 dark:bg-violet-500/10' => $depistage_target === 'laboratoire',
+                            'border-slate-200 bg-white hover:border-violet-200 dark:border-slate-700 dark:bg-slate-900/40' => $depistage_target !== 'laboratoire',
+                        ])>
+                            <input type="radio" wire:model.live="depistage_target" value="laboratoire"
+                                class="sr-only" />
+                            <div class="flex items-center gap-3">
+                                <div @class([
+                                    'flex size-9 items-center justify-center rounded-lg',
+                                    'bg-violet-500 text-white' => $depistage_target === 'laboratoire',
+                                    'bg-slate-100 text-slate-500 dark:bg-slate-800' => $depistage_target !== 'laboratoire',
+                                ])>
+                                    <flux:icon.beaker class="size-4" />
+                                </div>
+                                <div>
+                                    <p class="text-sm font-black text-slate-900 dark:text-white">Laboratoire</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Analyses et prélèvements</p>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label @class([
+                            'group cursor-pointer rounded-2xl border-2 p-4 transition',
+                            'border-violet-500 bg-violet-50/80 ring-2 ring-violet-500/20 dark:border-violet-400 dark:bg-violet-500/10' => $depistage_target === 'imagerie',
+                            'border-slate-200 bg-white hover:border-violet-200 dark:border-slate-700 dark:bg-slate-900/40' => $depistage_target !== 'imagerie',
+                        ])>
+                            <input type="radio" wire:model.live="depistage_target" value="imagerie" class="sr-only" />
+                            <div class="flex items-center gap-3">
+                                <div @class([
+                                    'flex size-9 items-center justify-center rounded-lg',
+                                    'bg-violet-500 text-white' => $depistage_target === 'imagerie',
+                                    'bg-slate-100 text-slate-500 dark:bg-slate-800' => $depistage_target !== 'imagerie',
+                                ])>
+                                    <flux:icon.camera class="size-4" />
+                                </div>
+                                <div>
+                                    <p class="text-sm font-black text-slate-900 dark:text-white">Imagerie</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Radio, écho, scanner…</p>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label @class([
+                            'group cursor-pointer rounded-2xl border-2 p-4 transition',
+                            'border-violet-500 bg-violet-50/80 ring-2 ring-violet-500/20 dark:border-violet-400 dark:bg-violet-500/10' => $depistage_target === 'pacquet_soins',
+                            'border-slate-200 bg-white hover:border-violet-200 dark:border-slate-700 dark:bg-slate-900/40' => $depistage_target !== 'pacquet_soins',
+                        ])>
+                            <input type="radio" wire:model.live="depistage_target" value="pacquet_soins"
+                                class="sr-only" />
+                            <div class="flex items-center gap-3">
+                                <div @class([
+                                    'flex size-9 items-center justify-center rounded-lg',
+                                    'bg-violet-500 text-white' => $depistage_target === 'pacquet_soins',
+                                    'bg-slate-100 text-slate-500 dark:bg-slate-800' => $depistage_target !== 'pacquet_soins',
+                                ])>
+                                    <flux:icon.rectangle-stack class="size-4" />
+                                </div>
+                                <div>
+                                    <p class="text-sm font-black text-slate-900 dark:text-white">Paquet de soins</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Ensemble d'actes groupés</p>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-select.styled label="Prise en charge" placeholder="Choisir..." wire:model="assurance_id"
+                        :request="route('api.assurances')" select="label:name|value:id" searchable />
+                </div>
+
+                @if ($depistage_target === 'laboratoire')
+                    <div>
+                        <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Laboratoire</p>
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <x-input label="Département" :value="$this->laboratoireDepartement()?->name ?? 'Laboratoire'" disabled />
                             <x-select.styled label="Examens de laboratoire *" wire:model="acte_ids" :request="[
                                 'url' => route('api.actes'),
                                 'params' => ['departement' => $this->laboratoireDepartement()?->id],
-                            ]"
-                                select="label:name|value:id" multiple />
-                            <x-select.styled label="Membre de l'equipe" placeholder="Choisir..." wire:model="user_ids"
-                                :request="[
-                                    'url' => route('api.usersIn'),
-                                    'params' => ['hopital_id' => current_hopital_id()],
-                                ]" select="label:name|value:id" multiple />
-                        </div>
-                    @endif
-
-                    @if ($depistage_target === 'imagerie')
-                        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <x-input label="Departement" :value="$this->imagerieDepartement()?->name ?? 'Imagerie'" disabled />
-                            <x-select.styled label="Actes d'imagerie *" wire:model="acte_ids" :request="[
-                                'url' => route('api.actes'),
-                                'params' => ['departement' => $this->imagerieDepartement()?->id],
-                            ]"
-                                select="label:name|value:id" multiple />
-                            <x-select.styled label="Membre de l'equipe" placeholder="Choisir..." wire:model="user_ids"
-                                :request="[
-                                    'url' => route('api.usersIn'),
-                                    'params' => ['hopital_id' => current_hopital_id()],
-                                ]" select="label:name|value:id" multiple />
-                        </div>
-                    @endif
-
-                    @if ($depistage_target === 'pacquet_soins')
-                        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <x-select.styled label="Paquet de soins *" wire:model.live="pacquet_soin_id"
-                                :request="route('api.pacquetSoins')" select="label:name|value:id" searchable />
-                            <x-select.styled label="Membre de l'equipe" placeholder="Choisir..."
+                            ]" select="label:name|value:id" multiple />
+                            <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
                                 wire:model="user_ids" :request="[
                                     'url' => route('api.usersIn'),
                                     'params' => ['hopital_id' => current_hopital_id()],
                                 ]" select="label:name|value:id" multiple />
-                            <x-input label="Reference departement" :value="$ref ?: 'Auto'" disabled />
+                        </div>
+                    </div>
+                @endif
+
+                @if ($depistage_target === 'imagerie')
+                    <div>
+                        <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Imagerie</p>
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <x-input label="Département" :value="$this->imagerieDepartement()?->name ?? 'Imagerie'" disabled />
+                            <x-select.styled label="Actes d'imagerie *" wire:model="acte_ids" :request="[
+                                'url' => route('api.actes'),
+                                'params' => ['departement' => $this->imagerieDepartement()?->id],
+                            ]" select="label:name|value:id" multiple />
+                            <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
+                                wire:model="user_ids" :request="[
+                                    'url' => route('api.usersIn'),
+                                    'params' => ['hopital_id' => current_hopital_id()],
+                                ]" select="label:name|value:id" multiple />
+                        </div>
+                    </div>
+                @endif
+
+                @if ($depistage_target === 'pacquet_soins')
+                    <div>
+                        <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Paquet de soins
+                        </p>
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <x-select.styled label="Paquet de soins *" wire:model.live="pacquet_soin_id"
+                                :request="route('api.pacquetSoins')" select="label:name|value:id" searchable />
+                            <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
+                                wire:model="user_ids" :request="[
+                                    'url' => route('api.usersIn'),
+                                    'params' => ['hopital_id' => current_hopital_id()],
+                                ]" select="label:name|value:id" multiple />
+                            <x-input label="Référence département" :value="$ref ?: 'Auto'" disabled />
                         </div>
 
                         @if ($pacquet_soin_id)
                             <div
-                                class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-                                <p class="text-sm font-semibold text-slate-900 dark:text-white">Actes inclus dans le
-                                    paquet</p>
-                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                    Les actes du paquet sont preselectionnes. Vous pouvez en deselectionner si
-                                    necessaire.
-                                </p>
-
-                                <div class="mt-4 grid gap-3 md:grid-cols-2">
-                                    @foreach (\App\Models\Configs\PacquetSoin::query()->with(['actes.departement', 'actes.service'])->find($pacquet_soin_id)?->actes ?? collect() as $acte)
+                                class="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+                                <div
+                                    class="border-b border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Actes du paquet
+                                    </p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Présélectionnés — décochez si
+                                        nécessaire.</p>
+                                </div>
+                                <div class="grid gap-2 p-4 md:grid-cols-2">
+                                    @foreach ($paquetActes as $acte)
                                         <label wire:key="depistage-paquet-acte-{{ $acte->id }}"
-                                            class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-sky-300 hover:bg-sky-50/60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-sky-700 dark:hover:bg-sky-950/30">
+                                            class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 transition hover:border-violet-300 hover:bg-violet-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-violet-600/40">
                                             <input type="checkbox" value="{{ $acte->id }}" wire:model="acte_ids"
-                                                class="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                                                class="mt-1 size-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                                             <div class="min-w-0 flex-1">
-                                                <div class="flex items-start justify-between gap-3">
-                                                    <p class="font-medium text-slate-900 dark:text-white">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">
                                                         {{ $acte->name }}</p>
                                                     <span
-                                                        class="whitespace-nowrap text-sm font-semibold text-sky-700 dark:text-sky-300">
+                                                        class="whitespace-nowrap text-xs font-bold text-violet-700 dark:text-violet-300">
                                                         {{ number_format((float) $acte->montant, 2, ',', ' ') }} $
                                                     </span>
                                                 </div>
-                                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                                    {{ $acte->departement?->name ?: 'Sans departement' }}
+                                                <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                                    {{ $acte->departement?->name ?: 'Sans département' }}
                                                     @if ($acte->service?->name)
-                                                        • {{ $acte->service->name }}
+                                                        · {{ $acte->service->name }}
                                                     @endif
                                                 </p>
                                             </div>
@@ -768,15 +988,37 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                                 </div>
                             </div>
                         @endif
-                    @endif
-
-                    <div class="flex justify-end">
-                        <flux:button wire:click="save" variant="primary" color="indigo" icon="save">
-                            Initialiser le depistage
-                        </flux:button>
                     </div>
-                </x-card>
-            @endif
+                @endif
+            </div>
+        </section>
+    @endif
+
+    {{-- Barre d'actions --}}
+    <div
+        class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-4 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+        <div class="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0 text-sm text-slate-500 dark:text-slate-400">
+                <span class="font-semibold text-slate-700 dark:text-slate-200">
+                    {{ $this->isConsultationType() ? 'Visite' : 'Examen' }}
+                </span>
+                · Fiche {{ $typeFichierLabels[$type_visite] ?? ucfirst($type_visite) }}
+                @if ($date_consultation)
+                    · {{ \Illuminate\Support\Carbon::parse($date_consultation)->format('d/m/Y') }}
+                @endif
+            </div>
+            <div class="flex flex-wrap justify-end gap-3">
+                <flux:button href="{{ route('patient.show', $patient->id) }}" wire:navigate variant="subtle">
+                    Annuler
+                </flux:button>
+                <flux:button wire:click="save" variant="primary" color="indigo" icon="check"
+                    wire:loading.attr="disabled">
+                    <span wire:loading.remove wire:target="save">
+                        {{ $this->isConsultationType() ? 'Ouvrir la visite' : "Initialiser l'examen" }}
+                    </span>
+                    <span wire:loading wire:target="save">Enregistrement…</span>
+                </flux:button>
+            </div>
         </div>
     </div>
 </div>

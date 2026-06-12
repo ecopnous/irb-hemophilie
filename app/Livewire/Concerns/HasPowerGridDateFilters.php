@@ -3,6 +3,7 @@
 namespace App\Livewire\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use PowerComponents\LivewirePowerGrid\Concerns\Filter as PowerGridFilter;
 
 trait HasPowerGridDateFilters
@@ -67,8 +68,16 @@ trait HasPowerGridDateFilters
     protected function applyCreatedAtDateFilters(Builder $query): Builder
     {
         return $query
-            ->when(filled($this->dateStart), fn (Builder $q) => $q->whereDate('created_at', '>=', $this->dateStart))
-            ->when(filled($this->dateEnd), fn (Builder $q) => $q->whereDate('created_at', '<=', $this->dateEnd));
+            ->when(filled($this->dateStart), fn (Builder $q) => $q->where(
+                'created_at',
+                '>=',
+                Carbon::parse($this->dateStart)->startOfDay()
+            ))
+            ->when(filled($this->dateEnd), fn (Builder $q) => $q->where(
+                'created_at',
+                '<=',
+                Carbon::parse($this->dateEnd)->endOfDay()
+            ));
     }
 
     private function syncDateFilterBadge(string $field, string $label, ?string $value): void

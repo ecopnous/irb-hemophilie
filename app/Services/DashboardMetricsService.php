@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Consultation;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -98,8 +99,16 @@ class DashboardMetricsService
                     $builder->whereHas('dossierPatient', fn (Builder $patientQuery) => $patientQuery->where('date_naissance', '>=', $minBirthDate));
                 }
             })
-            ->when(filled($filters['date_start'] ?? null), fn (Builder $builder) => $builder->whereDate('consultations.created_at', '>=', $filters['date_start']))
-            ->when(filled($filters['date_end'] ?? null), fn (Builder $builder) => $builder->whereDate('consultations.created_at', '<=', $filters['date_end']))
+            ->when(filled($filters['date_start'] ?? null), fn (Builder $builder) => $builder->where(
+                'consultations.created_at',
+                '>=',
+                Carbon::parse($filters['date_start'])->startOfDay()
+            ))
+            ->when(filled($filters['date_end'] ?? null), fn (Builder $builder) => $builder->where(
+                'consultations.created_at',
+                '<=',
+                Carbon::parse($filters['date_end'])->endOfDay()
+            ))
             ->old()
             ->where('consultations.hopital_id', $hopitalId);
 
@@ -111,7 +120,8 @@ class DashboardMetricsService
      */
     public function aggregateStats(Builder $baseQuery): array
     {
-        $today = today()->toDateString();
+        $todayStart = today()->startOfDay();
+        $todayEnd = today()->endOfDay();
         $driver = DB::connection()->getDriverName();
 
         $row = (clone $baseQuery)
@@ -122,8 +132,8 @@ class DashboardMetricsService
                 SUM(CASE WHEN consultations.user_id IS NULL THEN 1 ELSE 0 END) as sans_medecin,
                 SUM(CASE WHEN consultations.type = 'consultation' THEN 1 ELSE 0 END) as consultations,
                 SUM(CASE WHEN consultations.is_visite_program = ? THEN 1 ELSE 0 END) as programmees,
-                SUM(CASE WHEN DATE(consultations.created_at) = ? THEN 1 ELSE 0 END) as aujourd_hui
-            ", [$driver === 'sqlite' ? 1 : true, $today])
+                SUM(CASE WHEN consultations.created_at >= ? AND consultations.created_at <= ? THEN 1 ELSE 0 END) as aujourd_hui
+            ", [$driver === 'sqlite' ? 1 : true, $todayStart, $todayEnd])
             ->first();
 
         return [
@@ -157,16 +167,17 @@ class DashboardMetricsService
      */
     private function overviewAggregate(int $hopitalId): array
     {
-        $today = today()->toDateString();
+        $todayStart = today()->startOfDay();
+        $todayEnd = today()->endOfDay();
 
         $row = Consultation::query()
             ->where('hopital_id', $hopitalId)
             ->selectRaw("
-                SUM(CASE WHEN DATE(created_at) = ? AND user_id IS NULL AND type != 'depistage' THEN 1 ELSE 0 END) as triage,
+                SUM(CASE WHEN created_at >= ? AND created_at <= ? AND user_id IS NULL AND type != 'depistage' THEN 1 ELSE 0 END) as triage,
                 SUM(CASE WHEN laboratoire_id IS NOT NULL THEN 1 ELSE 0 END) as laboratoire,
                 SUM(CASE WHEN facturation_id IS NOT NULL THEN 1 ELSE 0 END) as facturation,
                 SUM(CASE WHEN imagerie_id IS NOT NULL THEN 1 ELSE 0 END) as imagerie
-            ", [$today])
+            ", [$todayStart, $todayEnd])
             ->first();
 
         return [

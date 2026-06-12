@@ -26,7 +26,7 @@ return new class extends Migration {
             $table->id();
             $table->string('reference');
             $table->enum('type', ['visite', 'examen']);
-            $table->enum('type_fichier', ['hémophilie', 'drépanocytose', 'standard'])->default('standard');
+            $table->enum('type_visite', ['hémophilie', 'drépanocytose', 'standard'])->default('standard');
             $table->boolean('is_project_period')->default(false);
 
             // consultation

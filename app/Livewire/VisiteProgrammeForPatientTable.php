@@ -52,7 +52,7 @@ final class VisiteProgrammeForPatientTable extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            ->add('type_fichier', fn($consultation) => ucfirst($consultation->type_fichier ?? '-'))
+            ->add('type_visite', fn($consultation) => ucfirst($consultation->type_visite ?? '-'))
             ->add('reference', fn($consultation) => $consultation->reference ?? '-')
             ->add('departement', fn($consultation) => ucwords($consultation->departement?->name) ?? '-')
             ->add('mois', fn($consultation) => $consultation->mois ?? '-')
@@ -77,7 +77,7 @@ final class VisiteProgrammeForPatientTable extends PowerGridComponent
                 ->searchable(),
 
 
-            Column::make('Type Fiche', 'type_fichier')
+            Column::make('Type Fiche', 'type_visite')
                 ->bodyAttribute('text-xs')
                 ->sortable()
                 ->searchable(),

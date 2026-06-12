@@ -118,63 +118,11 @@ new #[Title('Tableau de bord réception')] class extends Component {
             </div>
 
             <div class="mt-5 grid gap-3">
-                <a href="{{ route('reception.papeterie') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Papeterie</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Fournitures de bureau</p>
-                    </div>
-                    <flux:icon.clipboard-document-list class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
-                </a>
-
-                <a href="{{ route('reception.services') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Service de base</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Equipement menager</p>
-                    </div>
-                    <flux:icon.briefcase class="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
-                </a>
-
-                <a href="{{ route('consultation.triage') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Triage</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Patients à orienter</p>
-                    </div>
-                    <span
-                        class="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">{{ $this->overview['triage'] }}</span>
-                </a>
-
-                <a href="{{ route('laboratoire.index') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Laboratoire</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Bons en circulation</p>
-                    </div>
-                    <span
-                        class="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">{{ $this->overview['laboratoire'] }}</span>
-                </a>
-
-                <a href="{{ route('facturation.index') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Facturation</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Dossiers à traiter</p>
-                    </div>
-                    <span
-                        class="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">{{ $this->overview['facturation'] }}</span>
-                </a>
-
-                <a href="{{ route('imagerie.index') }}" wire:navigate
-                    class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-cyan-200 hover:bg-cyan-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-cyan-500/30 dark:hover:bg-cyan-500/10">
-                    <div>
-                        <p class="text-sm font-bold text-slate-900 dark:text-white">Imagerie</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Demandes associées</p>
-                    </div>
-                    <span
-                        class="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">{{ $this->overview['imagerie'] }}</span>
-                </a>
+                @foreach (config('navigation.dashboard_shortcuts', []) as $shortcut)
+                    <x-nav.dashboard-shortcut :area="$shortcut['area']" :label="$shortcut['label']"
+                        :description="$shortcut['description']" :route="$shortcut['route']" :icon="$shortcut['icon'] ?? null"
+                        :badge-value="isset($shortcut['badge']) ? $this->overview[$shortcut['badge']] ?? null : null" />
+                @endforeach
             </div>
         </div>
     </div>

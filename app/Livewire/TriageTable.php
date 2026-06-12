@@ -2,9 +2,8 @@
 
 namespace App\Livewire;
 
-use App\Models\Configs\Departement;
-use App\Models\Configs\Projet;
 use App\Models\Consultation;
+use App\Support\PowerGridFilterCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Str;
@@ -21,6 +20,10 @@ final class TriageTable extends PowerGridComponent
     use WithExport;
 
     public string $tableName = 'triageTable';
+
+    public bool $deferLoading = true;
+
+    public string $loadingComponent = 'components.table.loading';
 
     public function boot(): void
     {
@@ -68,7 +71,7 @@ final class TriageTable extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            ->add('type_fichier', fn (Consultation $consultation) => ucfirst($consultation->type_fichier ?? '-'))
+            ->add('type_visite', fn (Consultation $consultation) => ucfirst($consultation->type_visite ?? '-'))
             ->add('patient_genre', fn (Consultation $consultation) => $consultation->dossierPatient?->genre)
             ->add('projet_id', fn (Consultation $consultation) => $consultation->projet_id)
             ->add('departement_id', fn (Consultation $consultation) => $consultation->departement_id)
@@ -147,7 +150,7 @@ final class TriageTable extends PowerGridComponent
             ->add('prenom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->prenom))
             ->add('genre_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->genre))
             ->add('age_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->age))
-            ->add('type_fichier_export', fn (Consultation $consultation) => Str::lower($consultation->type_fichier))
+            ->add('type_visite_export', fn (Consultation $consultation) => Str::lower($consultation->type_visite))
             ->add('departement_export', fn (Consultation $consultation) => Str::lower($consultation->departement?->name))
             ->add('mois_export', fn (Consultation $consultation) => Str::lower($consultation->mois))
             ->add('date_export', fn (Consultation $consultation) => optional($consultation->created_at)->format('d/m/Y'))
@@ -171,7 +174,7 @@ final class TriageTable extends PowerGridComponent
             Column::make('Sexe', 'patient_genre', 'patient_genre')
                 ->hidden(),
 
-            Column::make('Type Fiche', 'type_fichier', 'type_fichier')
+            Column::make('Type Fiche', 'type_visite', 'type_visite')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
                 ->sortable(),
@@ -215,7 +218,7 @@ final class TriageTable extends PowerGridComponent
             Column::make('Age', 'age_export')
                 ->visibleInExport(true)
                 ->hidden(),
-            Column::make('Type Fiche', 'type_fichier_export')
+            Column::make('Visite', 'type_visite_export')
                 ->visibleInExport(true)
                 ->hidden(),
             Column::make('Département', 'departement_export')
@@ -251,26 +254,22 @@ final class TriageTable extends PowerGridComponent
                     fn (Builder $patientQuery) => $patientQuery->where('genre', $value)
                 )),
 
-            Filter::select('type_fichier', 'type_fichier')
+            Filter::select('type_visite', 'type_visite')
                 ->dataSource(collect([
                     ['id' => 'standard', 'name' => 'Standard'],
-                    ['id' => 'hemophile', 'name' => 'Hemophile'],
-                    ['id' => 'redac', 'name' => 'Redac'],
+                    ['id' => 'hémophilie', 'name' => 'Hémophilie'],
+                    ['id' => 'drépanocytose', 'name' => 'Drépanocytose'],
                 ]))
                 ->optionValue('id')
                 ->optionLabel('name'),
 
             Filter::select('departement_id', 'departement_id')
-                ->dataSource(
-                    Departement::query()->orderBy('name')->get(['id', 'name'])
-                )
+                ->dataSource(PowerGridFilterCache::departements())
                 ->optionValue('id')
                 ->optionLabel('name'),
 
             Filter::select('projet_id', 'projet_id')
-                ->dataSource(
-                    Projet::query()->orderBy('name')->get(['id', 'name'])
-                )
+                ->dataSource(PowerGridFilterCache::projets())
                 ->optionValue('id')
                 ->optionLabel('name'),
 

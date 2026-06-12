@@ -16,7 +16,12 @@ use PowerComponents\LivewirePowerGrid\PowerGridComponent;
 final class LaboTable extends PowerGridComponent
 {
     public string $tableName = 'laboTable';
+
     public string $context = 'reception';
+
+    public bool $deferLoading = true;
+
+    public string $loadingComponent = 'components.table.loading';
 
     public function setUp(): array
     {
@@ -34,7 +39,13 @@ final class LaboTable extends PowerGridComponent
 
     public function datasource(): Builder
     {
-        return Laboratoire::query()->with(['consultation', 'userValideur'])
+        return Laboratoire::query()
+            ->with([
+                'consultation.dossierPatient:id,nom,postnom,prenom,genre,date_naissance,nin',
+                'consultation.departement:id,name',
+                'consultation.user:id,name',
+                'userValideur:id,name',
+            ])
             ->whereHopitalId(current_hopital_id())
             ->when($this->context === 'rapport', function (Builder $query) {
                 $query->where(function (Builder $reportQuery) {

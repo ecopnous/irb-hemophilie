@@ -19,6 +19,10 @@ final class ReceptionTable extends PowerGridComponent
 
     public string $tableName = 'receptionTable';
 
+    public bool $deferLoading = true;
+
+    public string $loadingComponent = 'components.table.loading';
+
     public int $rowCounter = 0;
 
     public function setUp(): array
@@ -96,7 +100,7 @@ final class ReceptionTable extends PowerGridComponent
                 );
             })
             ->add('type', fn (Consultation $consultation) => $consultation->type)
-            ->add('type_fichier', fn (Consultation $consultation) => ucfirst($consultation->type_fichier ?? '-'))
+            ->add('type_visite', fn (Consultation $consultation) => ucfirst($consultation->type_visite ?? '-'))
             ->add('patient_genre', fn (Consultation $consultation) => $consultation->dossierPatient?->genre)
             ->add('patient_age_bracket', fn () => null)
             ->add('temperature', fn (Consultation $consultation) => $consultation->temperature === null ? '-' : $consultation->temperature . '°C')
@@ -205,7 +209,7 @@ final class ReceptionTable extends PowerGridComponent
                 ->bodyAttribute('text-xs')
                 ->sortable(),
 
-            Column::make('Type Fiche', 'type_fichier', 'type_fichier')
+            Column::make('Visite', 'type_visite', 'type_visite')
                 ->bodyAttribute('text-xs')
                 ->sortable(),
 

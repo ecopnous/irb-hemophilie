@@ -36,7 +36,7 @@ class ConsultationImportRowMapper
         return array_filter([
             'dossier_patient_id' => $dossierPatientId,
             'type' => $type,
-            'type_fichier' => $this->normalizeTypeFichier($row['type_fichier'] ?? null),
+            'type_visite' => $this->normalizeTypeVisite($row['type_visite'] ?? $row['type_fichier'] ?? null),
             'departement_id' => $departementId,
             'service_id' => $this->resolveServiceId($row['service'] ?? null, $departementId),
             'assurance_id' => $this->resolveAssuranceId($row['assurance'] ?? null),
@@ -70,7 +70,7 @@ class ConsultationImportRowMapper
         return [
             'dossier_patient_id' => ['required', 'integer', 'exists:dossier_patients,id'],
             'type' => ['required', 'in:consultation,depistage'],
-            'type_fichier' => ['required', 'in:standard,hemophile,redac'],
+            'type_visite' => ['required', 'in:standard,hémophilie,drépanocytose,hemophile,redac'],
             'departement_id' => ['required', 'integer', 'exists:departements,id'],
             'service_id' => ['nullable', 'integer', 'exists:services,id'],
             'assurance_id' => ['nullable', 'integer', 'exists:assurances,id'],
@@ -270,13 +270,13 @@ class ConsultationImportRowMapper
         return $value === 'depistage' ? 'depistage' : 'consultation';
     }
 
-    private function normalizeTypeFichier(?string $value): string
+    private function normalizeTypeVisite(?string $value): string
     {
-        $value = Str::lower(trim((string) ($value ?: 'standard')));
+        $value = Str::lower(Str::ascii(trim((string) ($value ?: 'standard'))));
 
         return match ($value) {
-            'hemophile' => 'hemophile',
-            'redac' => 'redac',
+            'hemophile', 'hemophilie' => 'hémophilie',
+            'redac', 'drepanocytose', 'drépanocytose' => 'drépanocytose',
             default => 'standard',
         };
     }

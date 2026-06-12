@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
     Route::livewire('/dashboard', 'pages::dashboard')->name('dashboard');
 
     Route::prefix('reception')->name('reception.')->group(function () {
@@ -74,6 +74,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('/valeurs-exactes', 'pages::labo.valeurs_exactes')->name('valeurs_exactes');
         Route::livewire('/stock', 'pages::labo.stock')->name('stock');
         Route::livewire('/mouvements-stock', 'pages::labo.stock_movements')->name('stock_movements');
+        Route::livewire('/groupes', 'pages::labo.groupes.index')->name('groupes.index');
+        Route::livewire('/groupes/create', 'pages::labo.groupes.create')->name('groupes.create');
+        Route::livewire('/groupes/show/{id}', 'pages::labo.groupes.show')->name('groupes.show');
         Route::get('/show/{id}/print', LaboratoireBonPdfController::class)->name('print');
         Route::livewire('/show/{id}', 'pages::labo.show')->name('show');
     });

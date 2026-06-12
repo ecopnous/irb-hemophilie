@@ -44,16 +44,19 @@
 
         <flux:sidebar.nav>
             @if (isset($back) && $back)
-                <flux:sidebar.item icon="arrow-turn-down-left" href="{{ route('dashboard') }}" wire:navigate>
-                    Retour à la réception
-                </flux:sidebar.item>
+                @if (nav_can('reception'))
+                    <flux:sidebar.item icon="arrow-turn-down-left" href="{{ route('dashboard') }}" wire:navigate>
+                        Retour à la réception
+                    </flux:sidebar.item>
+                @endif
             @else
-                <flux:sidebar.item icon="cog-6-tooth" href="{{ route('settings.hopital.index') }}" wire:navigate>
-                    Support téchnique
-                </flux:sidebar.item>
-                <flux:sidebar.item icon="building-office-2" href="{{ route('groupe_hopitaux.index') }}" wire:navigate>
-                    Groupe d'hopitaux
-                </flux:sidebar.item>
+                @foreach (config('navigation.sidebar_footer', []) as $item)
+                    @if (nav_can($item['area']))
+                        <flux:sidebar.item :icon="$item['icon']" href="{{ route($item['route']) }}" wire:navigate>
+                            {{ $item['label'] }}
+                        </flux:sidebar.item>
+                    @endif
+                @endforeach
             @endif
         </flux:sidebar.nav>
     </flux:sidebar>
@@ -63,7 +66,10 @@
         <flux:brand href="#" logo="{{ asset('assets/dart-logo.png') }}" class="hidden max-lg:hidden! dark:flex" />
 
         <flux:navbar class="-mb-px max-lg:hidden">
-            <flux:navbar.item icon="chart-column-big" href="{{ route('analytics') }}" :current="request()->routeIs('analytics')" wire:navigate>Analytics</flux:navbar.item>
+            @if (nav_can('analytics'))
+                <flux:navbar.item icon="chart-column-big" href="{{ route('analytics') }}"
+                    :current="request()->routeIs('analytics')" wire:navigate>Analytics</flux:navbar.item>
+            @endif
             <flux:navbar.item icon="envelope" badge="12" href="#">Boite de reception</flux:navbar.item>
             <flux:navbar.item icon="document-text" href="#">Documents</flux:navbar.item>
         </flux:navbar>

@@ -118,7 +118,7 @@ new #[Title('Valeurs normales laboratoire'), Layout('layouts::app.other.laborato
 
 <div class="space-y-6">
     <section
-        class="overflow-hidden rounded-[2rem] border border-cyan-100 bg-gradient-to-br from-white via-cyan-50/40 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+        class="overflow-hidden rounded-4xl border border-cyan-100 bg-linear-to-br from-white via-cyan-50/40 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
         <div class="flex flex-col gap-6 px-5 py-6 sm:px-6 lg:px-8 lg:py-8">
             <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
                 <div class="max-w-3xl space-y-3">
@@ -139,7 +139,7 @@ new #[Title('Valeurs normales laboratoire'), Layout('layouts::app.other.laborato
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:min-w-[28rem]">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:min-w-md">
                     <div
                         class="rounded-3xl border border-white/70 bg-white/80 px-4 py-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/75">
                         <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Mode</p>
@@ -191,7 +191,7 @@ new #[Title('Valeurs normales laboratoire'), Layout('layouts::app.other.laborato
             <section
                 class="sticky top-4 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div
-                    class="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 to-cyan-50 px-4 py-4 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900 sm:px-5">
+                    class="border-b border-slate-200/80 bg-linear-to-r from-slate-50 to-cyan-50 px-4 py-4 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900 sm:px-5">
                     <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Fiche de modification</p>
                     <h3 class="mt-2 text-xl font-black text-slate-950 dark:text-white">
                         {{ $selectedActe?->name ?? 'Selectionnez un acte' }}

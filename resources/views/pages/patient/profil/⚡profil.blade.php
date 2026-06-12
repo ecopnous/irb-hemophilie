@@ -263,9 +263,9 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                             <span class="rounded-lg bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
                                 Type : {{ $last->type === 'depistage' ? 'Examen' : 'Visite médicale' }}
                             </span>
-                            @if ($last->type_fichier)
+                            @if ($last->type_visite)
                                 <span class="rounded-lg bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
-                                    Fiche : {{ ucfirst($last->type_fichier) }}
+                                    Fiche : {{ ucfirst($last->type_visite) }}
                                 </span>
                             @endif
                             @if ($last->mois)

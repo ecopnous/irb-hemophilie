@@ -24,7 +24,7 @@ class ConsultationImportInstructionsSheet implements FromArray, WithColumnWidths
             ['nin', 'Oui*', 'NIN du patient existant', 'NIN-26M-00001'],
             ['ins', 'Oui*', 'INS du patient (si pas de NIN)', 'INS12345'],
             ['type', 'Non', 'Type de consultation', 'consultation, depistage'],
-            ['type_fichier', 'Non', 'Type de fiche medicale', 'standard, hemophile, redac'],
+            ['type_visite', 'Non', 'Type de visite / fiche medicale', 'standard, hémophilie, drépanocytose'],
             ['departement', 'Oui', 'Departement (ref ou nom)', 'pdt, pediatrie, labo'],
             ['service', 'Non', 'Service medical', 'Biochimi sanguine'],
             ['actes', 'Oui', 'Actes separes par virgule ou point-virgule', 'Visite medicale; Pansement simple'],

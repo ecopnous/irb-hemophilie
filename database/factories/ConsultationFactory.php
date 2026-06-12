@@ -25,7 +25,7 @@ class ConsultationFactory extends Factory
         return [
             'reference' => sprintf('R-%s%s-%05d', now()->format('y'), $prefix, $seq),
             'type' => $type,
-            'type_fichier' => fake()->randomElement(['hemophile', 'redac', 'standard']),
+            'type_visite' => fake()->randomElement(['hémophilie', 'drépanocytose', 'standard']),
             'is_project_period' => false,
             'symptomes' => fake()->optional()->sentence(),
             'examen_clinique' => fake()->optional()->sentence(),

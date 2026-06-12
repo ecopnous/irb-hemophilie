@@ -133,7 +133,8 @@ new #[Title('Nouvel utilisateur'), Layout('layouts::app.other.support_tech')] cl
                     ['label' => 'Comptable', 'value' => 'comptable'],
                     ['label' => 'Infirmiere', 'value' => 'infirmiere'],
                     ['label' => 'Medecin', 'value' => 'medecin'],
-                    ['label' => 'Laboratin', 'value' => 'laboratin'],
+                    ['label' => 'Laborantin', 'value' => 'laborantin'],
+                    ['label' => 'Radiologue', 'value' => 'radiologue'],
                     ['label' => 'Pharmacien', 'value' => 'pharmacien'],
                     ['label' => 'Technicien', 'value' => 'technicien'],
                 ]" />

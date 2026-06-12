@@ -599,7 +599,7 @@ new #[Title('Fiche de consultation')] class extends Component {
             $programmed = Consultation::createWithPeriodContext(
                 [
                     'type' => 'consultation',
-                    'type_fichier' => $owner->type_fichier,
+                    'type_visite' => $owner->type_visite,
                     'dossier_patient_id' => $owner->dossier_patient_id,
                     'departement_id' => $owner->departement_id,
                     'projet_id' => $owner->projet_id,
@@ -703,7 +703,7 @@ new #[Title('Fiche de consultation')] class extends Component {
             return [];
         }
 
-        return [['label' => 'Reference', 'value' => $rdv->reference], ['label' => 'Type de fiche', 'value' => ucfirst((string) $rdv->type_fichier)], ['label' => 'Departement', 'value' => $rdv->departement?->name ?: '-'], ['label' => 'Service', 'value' => $rdv->service?->name ?: '-'], ['label' => 'Medecin', 'value' => $rdv->user?->name ?: 'Non assigne'], ['label' => 'Projet', 'value' => $rdv->projet?->name ?: '-'], ['label' => 'Prise en charge', 'value' => $rdv->assurance?->name ?: 'Paiement direct'], ['label' => 'Periode', 'value' => $rdv->mois ?: '-']];
+        return [['label' => 'Reference', 'value' => $rdv->reference], ['label' => 'Type de fiche', 'value' => ucfirst((string) $rdv->type_visite)], ['label' => 'Departement', 'value' => $rdv->departement?->name ?: '-'], ['label' => 'Service', 'value' => $rdv->service?->name ?: '-'], ['label' => 'Medecin', 'value' => $rdv->user?->name ?: 'Non assigne'], ['label' => 'Projet', 'value' => $rdv->projet?->name ?: '-'], ['label' => 'Prise en charge', 'value' => $rdv->assurance?->name ?: 'Paiement direct'], ['label' => 'Periode', 'value' => $rdv->mois ?: '-']];
     }
 
     public function hasContent(?string $value): bool
@@ -724,7 +724,7 @@ new #[Title('Fiche de consultation')] class extends Component {
 
     public function infoRows(): array
     {
-        return [['label' => 'Reference', 'value' => $this->consultation->reference], ['label' => 'Type', 'value' => $this->consultation->type === 'consultation' ? 'Visite' : 'Examen'], ['label' => 'Fiche', 'value' => ucfirst((string) $this->consultation->type_fichier)], ['label' => 'Periode', 'value' => $this->consultation->mois ?: '-'], ['label' => 'Departement', 'value' => $this->consultation->departement?->name ?: '-'], ['label' => 'Service', 'value' => $this->consultation->service?->name ?: '-'], ['label' => 'Medecin', 'value' => $this->consultation->user?->name ?: 'Non assigne'], ['label' => 'Projet', 'value' => $this->consultation->projet?->name ?: '-'], ['label' => 'Prise en charge', 'value' => $this->consultation->assurance?->name ?: 'Paiement direct'], ['label' => 'Date creation', 'value' => optional($this->consultation->created_at)->format('d/m/Y H:i') ?: '-']];
+        return [['label' => 'Reference', 'value' => $this->consultation->reference], ['label' => 'Type', 'value' => $this->consultation->type === 'consultation' ? 'Visite' : 'Examen'], ['label' => 'Fiche', 'value' => ucfirst((string) $this->consultation->type_visite)], ['label' => 'Periode', 'value' => $this->consultation->mois ?: '-'], ['label' => 'Departement', 'value' => $this->consultation->departement?->name ?: '-'], ['label' => 'Service', 'value' => $this->consultation->service?->name ?: '-'], ['label' => 'Medecin', 'value' => $this->consultation->user?->name ?: 'Non assigne'], ['label' => 'Projet', 'value' => $this->consultation->projet?->name ?: '-'], ['label' => 'Prise en charge', 'value' => $this->consultation->assurance?->name ?: 'Paiement direct'], ['label' => 'Date creation', 'value' => optional($this->consultation->created_at)->format('d/m/Y H:i') ?: '-']];
     }
 
     public function vitalRows(): array

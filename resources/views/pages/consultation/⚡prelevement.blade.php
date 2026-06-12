@@ -133,10 +133,10 @@ new class extends Component {
     $medecinAssigne = filled($consultation->user_id) && $consultation->user;
 @endphp
 
-<div class="mx-auto max-w-6xl space-y-6 pb-28">
+<div class="mx-auto max-w-7xl space-y-6 pb-28">
     {{-- En-tête patient --}}
     <section
-        class="overflow-hidden rounded-[2rem] border border-cyan-100 bg-gradient-to-br from-white via-cyan-50/60 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+        class="overflow-hidden rounded-4xl border border-cyan-100 bg-linear-to-br from-white via-cyan-50/60 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
         <div class="flex flex-col gap-6 px-6 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between">
             <div class="space-y-3">
                 <x-breadcrumbs :items="[
@@ -160,7 +160,7 @@ new class extends Component {
             <div
                 class="flex items-center gap-4 rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
                 <div
-                    class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 text-lg font-black text-white shadow-md">
+                    class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-cyan-500 text-lg font-black text-white shadow-md">
                     {{ strtoupper(substr($patient->prenom ?? 'P', 0, 1) . substr($patient->nom ?? 'X', 0, 1)) }}
                 </div>
                 <div class="min-w-0">
@@ -228,7 +228,7 @@ new class extends Component {
             <div class="space-y-5 p-5">
                 @if ($medecinAssigne)
                     <div
-                        class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 dark:border-emerald-500/25 dark:from-emerald-500/10 dark:to-slate-900/40">
+                        class="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-5 dark:border-emerald-500/25 dark:from-emerald-500/10 dark:to-slate-900/40">
                         <div class="flex items-start gap-4">
                             <div
                                 class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-sm font-black text-white">

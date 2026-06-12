@@ -79,7 +79,7 @@ final class ConsultationTable extends PowerGridComponent
         return PowerGrid::fields()
             ->add('numero', fn () => ++$this->rowCounter)
             ->add('type', fn (Consultation $consultation) => $consultation->type)
-            ->add('type_fichier', fn (Consultation $consultation) => ucfirst($consultation->type_fichier ?? '-'))
+            ->add('type_visite', fn (Consultation $consultation) => ucfirst($consultation->type_visite ?? '-'))
             ->add('patient_genre', fn (Consultation $consultation) => $consultation->dossierPatient?->genre)
             ->add('patient_age_bracket', fn () => null)
             ->add('projet_id', fn (Consultation $consultation) => $consultation->projet_id)
@@ -187,7 +187,7 @@ final class ConsultationTable extends PowerGridComponent
             ->add('prenom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->prenom))
             ->add('genre_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->genre))
             ->add('age_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->age))
-            ->add('type_fichier_export', fn (Consultation $consultation) => Str::lower($consultation->type_fichier))
+            ->add('type_visite_export', fn (Consultation $consultation) => Str::lower($consultation->type_visite))
             ->add('temperature_export', fn (Consultation $consultation) => Str::lower($consultation->temperature))
             ->add('poids_export', fn (Consultation $consultation) => Str::lower($consultation->poids))
             ->add('departement_export', fn (Consultation $consultation) => Str::lower($consultation->departement?->name))
@@ -223,7 +223,7 @@ final class ConsultationTable extends PowerGridComponent
                 ->bodyAttribute('text-xs')
                 ->sortable(),
 
-            Column::make('Type Fiche', 'type_fichier', 'type_fichier')
+            Column::make('Visite', 'type_visite', 'type_visite')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
                 ->sortable(),
@@ -278,7 +278,7 @@ final class ConsultationTable extends PowerGridComponent
             Column::make('Prénom', 'prenom_export')->visibleInExport(true)->hidden(),
             Column::make('Genre', 'genre_export')->visibleInExport(true)->hidden(),
             Column::make('Age', 'age_export')->visibleInExport(true)->hidden(),
-            Column::make('Type Fiche', 'type_fichier_export')->visibleInExport(true)->hidden(),
+            Column::make('Type Fiche', 'type_visite_export')->visibleInExport(true)->hidden(),
             Column::make('Temperature', 'temperature_export')->visibleInExport(true)->hidden(),
             Column::make('Poids', 'poids_export')->visibleInExport(true)->hidden(),
             Column::make('Département', 'departement_export')->visibleInExport(true)->hidden(),

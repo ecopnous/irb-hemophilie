@@ -28,7 +28,7 @@ class DatabaseSeeder extends Seeder
             'email' => 'papos@gmail.com',
             'date_naissance' => '1990-05-15',
             'nationalite' => 'Congo-kinshasa',
-            'role' => 'developper',
+            'role' => 'administrateur',
             'genre' => 'M',
             'hopital_id' => 1,
             'password' => bcrypt('ecopnous'),
