@@ -128,7 +128,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->avenue = $this->patient->avenue;
         $this->num_habitation = $this->patient->num_habitation;
 
-        view()->share('current_patient', $id);
     }
 
     public function updateDemographiques()
@@ -367,7 +366,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
         ['label' => 'Dossiers patients', 'link' => 'patient.index', 'icon' => 'folder'],
         ['label' => $patient->nin, 'icon' => 'identification'],
-    ]" :patient="$patient" :current_patient="$current_patient">
+    ]" :patient="$patient" :current_patient="$patient->id">
         <x-slot name="subtitle">{{ ucfirst($patient->nom) }} {{ ucfirst($patient->postnom) }}
             {{ ucfirst($patient->prenom) }}</x-slot>
     </x-patient.patient-profil-header>

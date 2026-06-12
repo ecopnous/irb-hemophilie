@@ -12,7 +12,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public function mount(int $id): void
     {
         $this->patient = DossierPatient::findOrFail($id);
-        view()->share('current_patient', $id);
 
         $this->messages = [
             [

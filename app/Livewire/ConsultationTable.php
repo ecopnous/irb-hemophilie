@@ -2,75 +2,102 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HasConsultationPowerGridFilters;
 use App\Models\Consultation;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Str;
 use PowerComponents\LivewirePowerGrid\Column;
-use PowerComponents\LivewirePowerGrid\Facades\PowerGrid;
-use PowerComponents\LivewirePowerGrid\PowerGridFields;
-use PowerComponents\LivewirePowerGrid\PowerGridComponent;
-use PowerComponents\LivewirePowerGrid\Traits\WithExport;
 use PowerComponents\LivewirePowerGrid\Components\SetUp\Exportable;
+use PowerComponents\LivewirePowerGrid\Facades\PowerGrid;
+use PowerComponents\LivewirePowerGrid\PowerGridComponent;
+use PowerComponents\LivewirePowerGrid\PowerGridFields;
+use PowerComponents\LivewirePowerGrid\Traits\WithExport;
 
 final class ConsultationTable extends PowerGridComponent
 {
+    use HasConsultationPowerGridFilters;
     use WithExport;
+
     public string $tableName = 'consultationTable';
+
     public bool $deferLoading = true;
+
     public string $loadingComponent = 'components.table.loading';
+
     public int $rowCounter = 0;
+
+    public function boot(): void
+    {
+        config(['livewire-powergrid.filter' => 'outside']);
+    }
 
     public function setUp(): array
     {
         $this->rowCounter = 0;
+        $this->showFilters = true;
 
         return [
             PowerGrid::exportable(fileName: 'consultations')
                 ->type(Exportable::TYPE_XLS, Exportable::TYPE_CSV),
             PowerGrid::header()
+                ->showSearchInput()
                 ->showToggleColumns()
-                ->showSearchInput(),
+                ->includeViewOnTop('components.powergrid.powergrid-total'),
             PowerGrid::footer()
                 ->showPerPage()
-                ->showRecordCount(),
-
-            // PowerGrid::responsive()
-            //     ->fixedColumns('dossierPatient', 'date'),
+                ->showRecordCount('full'),
         ];
     }
 
     public function datasource(): Builder
     {
         return Consultation::query()
-            ->with(['dossierPatient', 'departement', 'facturation', 'user'])
-            ->where(function ($query) {
-                $query->orWhereNotNull('user_id')
+            ->with([
+                'dossierPatient:id,nom,postnom,prenom,genre,date_naissance',
+                'departement:id,name',
+                'user:id,name',
+            ])
+            ->where(function (Builder $query) {
+                $query->whereNotNull('user_id')
                     ->orWhere('type', 'depistage');
             })
             ->toDay()
-            ->thisHopital();
+            ->whereHopitalId(current_hopital_id())
+            ->latest('created_at');
     }
 
     public function relationSearch(): array
     {
-        return [];
+        return [
+            'dossierPatient' => ['nom', 'postnom', 'prenom'],
+        ];
     }
 
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            ->add('numero', fn() => ++$this->rowCounter)
-            ->add('type_fichier', fn($consultation) => ucfirst($consultation->type_fichier ?? '-'))
-            ->add('temperature', fn($consultation) => $consultation->temperature === null ? '-' : $consultation->temperature . '°C')
-            ->add('poids', fn($consultation) => $consultation->poids === null ? '-' : $consultation->poids . ' kg')
-            ->add('pression_arterielle', fn($consultation) => (!$consultation->systolite ? '-' : $consultation->systolite) . ' / ' . (!$consultation->diastolique ? '-' : $consultation->diastolique) . ' mmHg')
-            ->add('reference', function ($consultation) {
+            ->add('numero', fn () => ++$this->rowCounter)
+            ->add('type', fn (Consultation $consultation) => $consultation->type)
+            ->add('type_fichier', fn (Consultation $consultation) => ucfirst($consultation->type_fichier ?? '-'))
+            ->add('patient_genre', fn (Consultation $consultation) => $consultation->dossierPatient?->genre)
+            ->add('patient_age_bracket', fn () => null)
+            ->add('projet_id', fn (Consultation $consultation) => $consultation->projet_id)
+            ->add('is_clore', fn (Consultation $consultation) => $consultation->is_clore)
+            ->add('is_clore_label', fn (Consultation $consultation) => $consultation->is_clore ? 'Classé' : 'Ouvert')
+            ->add('departement_id', fn (Consultation $consultation) => $consultation->departement_id)
+            ->add('temperature', fn (Consultation $consultation) => $consultation->temperature === null ? '-' : $consultation->temperature . '°C')
+            ->add('poids', fn (Consultation $consultation) => $consultation->poids === null ? '-' : $consultation->poids . ' kg')
+            ->add('pression_arterielle', fn (Consultation $consultation) => (! $consultation->systolite ? '-' : $consultation->systolite) . ' / ' . (! $consultation->diastolique ? '-' : $consultation->diastolique) . ' mmHg')
+            ->add('reference', function (Consultation $consultation) {
                 return Blade::render('<div class="space-y-1">
                         @if($consultation->is_visite_program)
                             <p class="font-bold tracking-tight text-blue-600 dark:text-blue-300">
                                 Rendez-Vous
+                            </p>
+                        @elseif($consultation->type === "depistage")
+                            <p class="font-bold tracking-tight text-green-600 dark:text-green-300">
+                                Examen
                             </p>
                         @else
                             <p class="font-bold tracking-tight text-slate-900 dark:text-white">
@@ -84,7 +111,7 @@ final class ConsultationTable extends PowerGridComponent
                     ['consultation' => $consultation]
                 );
             })
-            ->add('dossierPatient', function ($consultation) {
+            ->add('dossierPatient', function (Consultation $consultation) {
                 return Blade::render('<div class="space-y-1">
                         <p class="font-bold uppercase tracking-tight text-slate-900 dark:text-white">
                             <a href="{{ route(\'consultation.show\', $consultation->id) }}" class="hover:text-blue-600" wire:navigate>{{ $consultation->dossierPatient?->full_name }}</a>
@@ -96,12 +123,28 @@ final class ConsultationTable extends PowerGridComponent
                     ['consultation' => $consultation]
                 );
             })
-            ->add('departement', function ($consultation) {
-                return ucwords($consultation->departement?->name) ?? '-';
+            ->add('departement', function (Consultation $consultation) {
+                return Blade::render('<div class="space-y-1">
+                        <p class="uppercase tracking-tight">
+                           {{ ucwords($consultation->departement?->name ?? \' - \') }}
+                        </p>
+                        @if($consultation->is_clore)
+                            <p class="text-xs font-medium text-green-600 dark:text-green-300">
+                                dossier classé
+                            </p>
+                        @else
+                            <p class="text-xs font-medium text-red-600 dark:text-red-300">
+                                dossier ouvert
+                            </p>
+                        @endif
+                    </div>',
+                    ['consultation' => $consultation]
+                );
             })
-            ->add('mois', fn($consultation) => $consultation->mois ?? '-')
-            ->add('user', fn($consultation) => ucfirst($consultation->user?->name ?? '-'))
-            ->add('date', function ($consultation) {
+            ->add('mois', fn (Consultation $consultation) => $consultation->mois ?? '-')
+            ->add('user_id', fn (Consultation $consultation) => $consultation->user_id)
+            ->add('user', fn (Consultation $consultation) => ucfirst($consultation->user?->name ?? '-'))
+            ->add('date', function (Consultation $consultation) {
                 return Blade::render('
                 <div>
                     <p class="font-medium text-slate-900 dark:text-white">
@@ -113,39 +156,44 @@ final class ConsultationTable extends PowerGridComponent
                 </div>
             ', ['consultation' => $consultation]);
             })
-            ->add('facture_action', function (Consultation $consultation) {
-                if ($consultation->facturation_id) {
+            ->add('action', function (Consultation $consultation) {
+                if ($consultation->type === 'depistage') {
                     return Blade::render('
-                        <a href="{{ route(\'facturation.show\', $consultation->facturation_id) }}" wire:navigate
+                        <a href="{{ route(\'consultation.show\', $consultation->id) }}" wire:navigate
                             class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:border-emerald-500/40">
-                            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                            Voir facture
+                            Résultat
+                        </a>
+                    ', ['consultation' => $consultation]);
+                }
+
+                if ($consultation->issue === null) {
+                    return Blade::render('
+                        <a href="{{ route(\'consultation.show\', $consultation->id) }}" wire:navigate
+                            class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:border-emerald-500/40">
+                            Consulter
                         </a>
                     ', ['consultation' => $consultation]);
                 }
 
                 return Blade::render('
                     <span class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
-                        <span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                        Sans facture
+                        Déjà Cloturée
                     </span>
                 ');
             })
-
-            // For export
-            ->add('reference_export', fn($consultation) => Str::lower($consultation->reference))
-            ->add('nom_export', fn($consultation) => Str::lower($consultation->dossierPatient?->nom))
-            ->add('post_nom_export', fn($consultation) => Str::lower($consultation->dossierPatient?->postnom))
-            ->add('prenom_export', fn($consultation) => Str::lower($consultation->dossierPatient?->prenom))
-            ->add('genre_export', fn($consultation) => Str::lower($consultation->dossierPatient?->genre))
-            ->add('age_export', fn($consultation) => Str::lower($consultation->dossierPatient?->age))
-            ->add('type_fichier_export', fn($consultation) => Str::lower($consultation->type_fichier))
-            ->add('temperature_export', fn($consultation) => Str::lower($consultation->temperature))
-            ->add('poids_export', fn($consultation) => Str::lower($consultation->poids))
-            ->add('departement_export', fn($consultation) => Str::lower($consultation->departement?->name))
-            ->add('mois_export', fn($consultation) => Str::lower($consultation->mois))
-            ->add('date_export', fn(Consultation $model) => optional($model->created_at)->format('d/m/Y'))
-            ->add('heure_export', fn(Consultation $model) => optional($model->created_at)->format('H:i:s'));
+            ->add('reference_export', fn (Consultation $consultation) => Str::lower($consultation->reference))
+            ->add('nom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->nom))
+            ->add('post_nom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->postnom))
+            ->add('prenom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->prenom))
+            ->add('genre_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->genre))
+            ->add('age_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->age))
+            ->add('type_fichier_export', fn (Consultation $consultation) => Str::lower($consultation->type_fichier))
+            ->add('temperature_export', fn (Consultation $consultation) => Str::lower($consultation->temperature))
+            ->add('poids_export', fn (Consultation $consultation) => Str::lower($consultation->poids))
+            ->add('departement_export', fn (Consultation $consultation) => Str::lower($consultation->departement?->name))
+            ->add('mois_export', fn (Consultation $consultation) => Str::lower($consultation->mois))
+            ->add('date_export', fn (Consultation $consultation) => optional($consultation->created_at)->format('d/m/Y'))
+            ->add('heure_export', fn (Consultation $consultation) => optional($consultation->created_at)->format('H:i:s'));
     }
 
     public function columns(): array
@@ -153,28 +201,37 @@ final class ConsultationTable extends PowerGridComponent
         return [
             Column::make('#', 'numero')
                 ->visibleInExport(false)
-                ->bodyAttribute('text-xs font-semibold text-center w-8')
-                ->sortable(),
+                ->bodyAttribute('text-xs font-semibold text-center w-8'),
 
-            Column::make('Reference', 'reference')
+            Column::make('Reference', 'reference', 'reference')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
                 ->sortable()
                 ->searchable(),
+
+            Column::make('Type', 'type', 'type')
+                ->hidden(),
+
+            Column::make('Sexe', 'patient_genre', 'patient_genre')
+                ->hidden(),
+
+            Column::make('Tranche d\'âge', 'patient_age_bracket', 'patient_age_bracket')
+                ->hidden(),
 
             Column::make('Patient', 'dossierPatient')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
-                ->sortable()
-                ->searchable(),
+                ->sortable(),
 
-            Column::make('Type Fiche', 'type_fichier')
+            Column::make('Type Fiche', 'type_fichier', 'type_fichier')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
-                ->sortable()
-                ->searchable(),
+                ->sortable(),
 
-            Column::make('Température', 'temperature')
+            Column::make('Projet', 'projet_id', 'projet_id')
+                ->hidden(),
+
+            Column::make('T°C', 'temperature')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
                 ->sortable(),
@@ -189,35 +246,32 @@ final class ConsultationTable extends PowerGridComponent
                 ->bodyAttribute('text-xs')
                 ->sortable(),
 
-            Column::make('Département', 'departement')
+            Column::make('Département', 'departement', 'departement_id')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
-                ->sortable()
-                ->searchable(),
+                ->sortable(),
 
-            Column::make('Période', 'mois')
+            Column::make('Dossier', 'is_clore_label', 'is_clore')
+                ->hidden(),
+
+            Column::make('Période', 'mois', 'mois')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
-                ->sortable()
-                ->searchable(),
+                ->sortable(),
 
-            Column::make('Medecin Traitant', 'user')
+            Column::make('Medecin Traitant', 'user', 'user_id')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
-                ->sortable()
-                ->searchable(),
+                ->sortable(),
 
-            Column::make('Date', 'date')
+            Column::make('Date', 'date', 'created_at')
                 ->visibleInExport(false)
                 ->bodyAttribute('text-xs')
-                ->sortable()
-                ->searchable(),
+                ->sortable(),
 
-
-            Column::make('Facture', 'facture_action')
+            Column::make('Action', 'action')
                 ->visibleInExport(false),
 
-            // For export
             Column::make('Reference', 'reference_export')->visibleInExport(true)->hidden(),
             Column::make('Nom', 'nom_export')->visibleInExport(true)->hidden(),
             Column::make('Post-nom', 'post_nom_export')->visibleInExport(true)->hidden(),
@@ -234,22 +288,8 @@ final class ConsultationTable extends PowerGridComponent
         ];
     }
 
-    // public function filters(): array
-    // {
-    //     return [
-    //         Filter::datetimepicker('created_at'),
-    //     ];
-    // }
-
-    /*
-    public function actionRules($row): array
+    public function filters(): array
     {
-       return [
-            // Hide button edit for ID 1
-            Rule::button('edit')
-                ->when(fn($row) => $row->id === 1)
-                ->hide(),
-        ];
+        return array_slice($this->consultationPowerGridFilters(), 0, -2);
     }
-    */
 }

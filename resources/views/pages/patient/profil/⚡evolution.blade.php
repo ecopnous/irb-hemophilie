@@ -22,7 +22,6 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
     public function mount(int $id): void
     {
         $this->patient = DossierPatient::query()->findOrFail($id);
-        view()->share('current_patient', $id);
     }
 
     public function refreshData(): void

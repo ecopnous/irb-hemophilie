@@ -2,39 +2,24 @@
 
 namespace App\Livewire;
 
-use App\Models\Configs\Departement;
-use App\Models\Configs\Projet;
+use App\Livewire\Concerns\HasConsultationPowerGridFilters;
+use App\Livewire\Concerns\HasPowerGridDateFilters;
 use App\Models\Consultation;
-use App\Models\User;
-use App\Support\AgeBrackets;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
 use PowerComponents\LivewirePowerGrid\Column;
-use PowerComponents\LivewirePowerGrid\Concerns\Filter as PowerGridFilter;
-use PowerComponents\LivewirePowerGrid\Facades\Filter;
 use PowerComponents\LivewirePowerGrid\Facades\PowerGrid;
 use PowerComponents\LivewirePowerGrid\PowerGridFields;
 use PowerComponents\LivewirePowerGrid\PowerGridComponent;
 
 final class ReceptionTable extends PowerGridComponent
 {
-    use PowerGridFilter {
-        clearAllFilters as powerGridClearAllFilters;
-        clearFilter as powerGridClearFilter;
-    }
+    use HasConsultationPowerGridFilters;
+    use HasPowerGridDateFilters;
 
     public string $tableName = 'receptionTable';
 
     public int $rowCounter = 0;
-
-    public ?string $dateStart = null;
-
-    public ?string $dateEnd = null;
-
-    public function boot(): void
-    {
-        config(['livewire-powergrid.filter' => 'outside']);
-    }
 
     public function setUp(): array
     {
@@ -45,7 +30,7 @@ final class ReceptionTable extends PowerGridComponent
             PowerGrid::header()
                 ->showSearchInput()
                 ->showToggleColumns()
-                ->includeViewOnTop('components.powergrid.reception-total'),
+                ->includeViewOnTop('components.powergrid.powergrid-total'),
             PowerGrid::footer()
                 ->showPerPage()
                 ->showRecordCount('full'),
@@ -62,68 +47,8 @@ final class ReceptionTable extends PowerGridComponent
             ])
             ->old()
             ->whereHopitalId(current_hopital_id())
-            ->when(filled($this->dateStart), fn (Builder $query) => $query->whereDate('created_at', '>=', $this->dateStart))
-            ->when(filled($this->dateEnd), fn (Builder $query) => $query->whereDate('created_at', '<=', $this->dateEnd))
+            ->tap(fn (Builder $query) => $this->applyCreatedAtDateFilters($query))
             ->latest('created_at');
-    }
-
-    public function updatedDateStart(?string $value): void
-    {
-        $this->resetPage();
-        $this->syncDateFilterBadge('date_start', 'Date début', $value);
-    }
-
-    public function updatedDateEnd(?string $value): void
-    {
-        $this->resetPage();
-        $this->syncDateFilterBadge('date_end', 'Date fin', $value);
-    }
-
-    public function clearFilter(string $field = ''): void
-    {
-        if ($field === 'date_start' || $field === '') {
-            $this->dateStart = null;
-        }
-
-        if ($field === 'date_end' || $field === '') {
-            $this->dateEnd = null;
-        }
-
-        if (in_array($field, ['date_start', 'date_end'], true)) {
-            $this->enabledFilters = array_values(array_filter(
-                $this->enabledFilters,
-                fn (array $filter) => $filter['field'] !== $field
-            ));
-            $this->persistState('filters');
-
-            return;
-        }
-
-        $this->powerGridClearFilter($field);
-    }
-
-    public function clearAllFilters(): void
-    {
-        $this->dateStart = null;
-        $this->dateEnd = null;
-
-        $this->powerGridClearAllFilters();
-    }
-
-    private function syncDateFilterBadge(string $field, string $label, ?string $value): void
-    {
-        if (blank($value)) {
-            $this->enabledFilters = array_values(array_filter(
-                $this->enabledFilters,
-                fn (array $filter) => $filter['field'] !== $field
-            ));
-
-            return;
-        }
-
-        if (! collect($this->enabledFilters)->contains('field', $field)) {
-            $this->addEnabledFilters($field, $label);
-        }
     }
 
     public function relationSearch(): array
@@ -136,7 +61,6 @@ final class ReceptionTable extends PowerGridComponent
     public function fields(): PowerGridFields
     {
         return PowerGrid::fields()
-            // ->add('numero', fn () => ++$this->rowCounter)
             ->add('reference', function (Consultation $consultation) {
                 return Blade::render('<div class="space-y-1">
                         @if($consultation->is_visite_program)
@@ -179,6 +103,7 @@ final class ReceptionTable extends PowerGridComponent
             ->add('pression_arterielle', fn (Consultation $consultation) => (! $consultation->systolite ? '-' : $consultation->systolite) . ' / ' . (! $consultation->diastolique ? '-' : $consultation->diastolique) . ' mmHg')
             ->add('poids', fn (Consultation $consultation) => $consultation->poids === null ? '-' : $consultation->poids . ' kg')
             ->add('departement_id', fn (Consultation $consultation) => $consultation->departement_id)
+            ->add('projet_id', fn (Consultation $consultation) => $consultation->projet_id)
             ->add('is_clore', fn (Consultation $consultation) => $consultation->is_clore)
             ->add('is_clore_label', fn (Consultation $consultation) => $consultation->is_clore ? 'Classé' : 'Ouvert')
             ->add('departement', function (Consultation $consultation) {
@@ -262,9 +187,6 @@ final class ReceptionTable extends PowerGridComponent
     public function columns(): array
     {
         return [
-            // Column::make('#', 'numero')
-            //     ->bodyAttribute('text-xs font-semibold text-center w-10'),
-
             Column::make('Reference', 'reference', 'reference')
                 ->bodyAttribute('text-xs')
                 ->sortable()
@@ -328,99 +250,6 @@ final class ReceptionTable extends PowerGridComponent
                 ->sortable(),
 
             Column::make('Action', 'action'),
-        ];
-    }
-
-    public function filters(): array
-    {
-        $hopitalId = current_hopital_id();
-
-        return [
-            Filter::inputText('reference')
-                ->operators(['contains']),
-
-            Filter::select('is_clore', 'is_clore')
-                ->dataSource(collect([
-                    ['id' => '1', 'name' => 'Classé'],
-                    ['id' => '0', 'name' => 'Ouvert'],
-                ]))
-                ->optionValue('id')
-                ->optionLabel('name')
-                ->builder(fn (Builder $query, string $value) => $query->where(
-                    'is_clore',
-                    filter_var($value, FILTER_VALIDATE_BOOLEAN)
-                )),
-
-            Filter::select('type', 'type')
-                ->dataSource(collect([
-                    ['id' => 'consultation', 'name' => 'Consultation'],
-                    ['id' => 'depistage', 'name' => 'Depistage'],
-                ]))
-                ->optionValue('id')
-                ->optionLabel('name'),
-
-            Filter::select('type_fichier', 'type_fichier')
-                ->dataSource(collect([
-                    ['id' => 'standard', 'name' => 'Standard'],
-                    ['id' => 'hemophile', 'name' => 'Hemophile'],
-                    ['id' => 'redac', 'name' => 'Redac'],
-                ]))
-                ->optionValue('id')
-                ->optionLabel('name'),
-
-            Filter::select('patient_genre', 'patient_genre')
-                ->dataSource(collect([
-                    ['id' => 'M', 'name' => 'Homme'],
-                    ['id' => 'F', 'name' => 'Femme'],
-                ]))
-                ->optionValue('id')
-                ->optionLabel('name')
-                ->builder(fn (Builder $query, string $value) => $query->whereHas(
-                    'dossierPatient',
-                    fn (Builder $patientQuery) => $patientQuery->where('genre', $value)
-                )),
-
-            Filter::select('patient_age_bracket', 'patient_age_bracket')
-                ->dataSource(collect(AgeBrackets::options()))
-                ->optionValue('id')
-                ->optionLabel('name')
-                ->builder(fn (Builder $query, string $value) => $query->whereHas(
-                    'dossierPatient',
-                    fn (Builder $patientQuery) => AgeBrackets::apply($patientQuery, $value)
-                )),
-
-            Filter::select('departement_id', 'departement_id')
-                ->dataSource(
-                    Departement::query()->orderBy('name')->get(['id', 'name'])
-                )
-                ->optionValue('id')
-                ->optionLabel('name'),
-
-            Filter::select('projet_id', 'projet_id')
-                ->dataSource(
-                    Projet::query()->orderBy('name')->get(['id', 'name'])
-                )
-                ->optionValue('id')
-                ->optionLabel('name'),
-
-            Filter::inputText('mois', 'mois')
-                ->operators(['contains']),
-
-            Filter::select('user_id', 'user_id')
-                ->dataSource(
-                    User::query()
-                        ->when($hopitalId, fn ($query) => $query->where('hopital_id', $hopitalId))
-                        ->orderBy('name')
-                        ->get(['id', 'name'])
-                )
-                ->optionValue('id')
-                ->optionLabel('name'),
-
-            Filter::dynamic('date_start', 'date_start')
-                ->component('powergrid.filters.date-start'),
-
-            Filter::dynamic('date_end', 'date_end')
-                ->component('powergrid.filters.date-end'),
         ];
     }
 }

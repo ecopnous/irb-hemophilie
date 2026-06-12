@@ -140,6 +140,21 @@ class DossierPatient extends Model
         return $this->date_naissance ? $this->date_naissance->format('d M, Y') : null;
     }
 
+    public function getPhotoUrlAttribute(): string
+    {
+        if (filled($this->photo)) {
+            if (str_starts_with($this->photo, 'http://') || str_starts_with($this->photo, 'https://')) {
+                return $this->photo;
+            }
+
+            return asset('storage/' . ltrim($this->photo, '/'));
+        }
+
+        $name = urlencode(trim(($this->prenom ?? 'P') . '+' . ($this->nom ?? 'X')));
+
+        return 'https://ui-avatars.com/api/?background=6366f1&color=fff&name=' . $name;
+    }
+
     protected static function booted()
     {
         static::creating(function ($patient) {

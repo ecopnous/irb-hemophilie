@@ -20,6 +20,7 @@ use App\Models\other\Tag;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -59,7 +60,9 @@ Route::name('api.')->group(function () {
             ->get(['id', 'nom', 'postnom', 'prenom', 'nin', 'photo'])
             ->map(fn($p) => [
                 'id' => $p->id,
-                'image' => $p->photo ? Storage::disk('public')->url($p->photo) : 'https://ui-avatars.com/api/?background=6366f1&color=fff&name=' . $p->prenom . '+' . $p->nom,
+                // Le problème est que Storage::disk('public') n'a pas de méthode url en contexte API.
+                // Utilisez plutôt asset('storage/' . $p->photo) pour générer l'URL publique correcte.
+                'image' => $p->photo ? asset('storage/' . $p->photo) : 'https://ui-avatars.com/api/?background=6366f1&color=fff&name=' . $p->prenom . '+' . $p->nom,
                 'name' => trim(strtoupper((string) $p->nom) . ' ' . strtoupper((string) $p->postnom) . ' ' . ucfirst((string) $p->prenom)),
                 'description' => $p->nin
             ]);
@@ -286,9 +289,49 @@ Route::name('api.')->group(function () {
         })->name('usersIn');
 
         Route::get('/user-connected', function (Request $request) {
+            $term = $request->search;
+            $hopitalId = (int) ($request->hopital_id ?: current_hopital_id());
+
+            if (! $term || strlen($term) < 2) {
+                return response()->json([]);
+            }
+
+            if ($hopitalId <= 0) {
+                return response()->json([]);
+            }
+
+            $departementId = (int) $request->departement_id;
+
             return User::query()
-                ->when($request->hopital_id, fn($q) => $q->where('hopital_id', $request->hopital_id))
-                ->get(['id', 'name']);
+                ->where('hopital_id', $hopitalId)
+                ->where('grade', 'medecin')
+                ->where(function ($query) use ($term) {
+                    $like = '%' . $term . '%';
+                    $query->where('name', 'like', $like)
+                        ->orWhere('prenom', 'like', $like)
+                        ->orWhere('post_nom', 'like', $like)
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('matricule', 'like', $like)
+                        ->orWhere('cnom', 'like', $like);
+                })
+                ->with('departement:id,name')
+                ->when(
+                    $departementId > 0,
+                    fn ($query) => $query->orderByRaw('CASE WHEN departement_id = ? THEN 0 ELSE 1 END', [$departementId])
+                )
+                ->orderBy('name')
+                ->limit(10)
+                ->get(['id', 'name', 'prenom', 'post_nom', 'email', 'matricule', 'departement_id', 'cnom'])
+                ->map(fn (User $user) => [
+                    'id' => $user->id,
+                    'name' => trim(collect([$user->name, $user->prenom])->filter()->implode(' ')),
+                    'description' => collect([
+                        $user->departement?->name,
+                        $user->matricule,
+                        $user->cnom ? 'CNOM ' . $user->cnom : null,
+                    ])->filter()->implode(' · '),
+                    'image' => 'https://ui-avatars.com/api/?background=0ea5e9&color=fff&name=' . urlencode($user->name ?? 'DR'),
+                ]);
         })->name('usersConnected');
 
         Route::get('/assurances', function (Request $request) {

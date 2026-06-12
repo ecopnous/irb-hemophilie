@@ -20,11 +20,6 @@ new #[Title('Triage')] class extends Component {};
                 Consultations en attente de prelevement et d'orientation.
             </p>
         </div>
-        <div
-            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            <p class="font-semibold text-slate-900 dark:text-white">Triage Total :
-                {{ 0 }}</p>
-        </div>
     </div>
 
     <livewire:triage-table />

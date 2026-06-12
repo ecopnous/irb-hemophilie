@@ -4,29 +4,42 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Seuils des tranches d'âge (réception)
+    | Tranches d'âge (réception)
     |--------------------------------------------------------------------------
     |
-    | Liste croissante des limites hautes (exclusives) en années.
-    | Exemple [9, 12, 18, 30] produit :
-    |   - moins de 9 ans
-    |   - 9 - 12 ans
-    |   - 12 - 18 ans
-    |   - 30 ans et plus
+    | Chaque tranche :
+    |   - min : âge minimum inclus (null = pas de borne basse)
+    |   - max : âge maximum exclus (null = pas de borne haute)
+    |
+    | Exemple : min 6, max 13 → de 6 à 12 ans inclus.
     |
     */
 
-    'age_bracket_thresholds' => [9, 12, 15, 18, 21, 24, 27, 30],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Limites « moins de X ans » (cumulatives)
-    |--------------------------------------------------------------------------
-    |
-    | Filtres globaux du type « - de 30 » (tous les patients de moins de 30 ans).
-    |
-    */
-
-    'age_under_limits' => [30],
+    'age_brackets' => [
+        [
+            'id' => '0_5',
+            'name' => '0 à 5 ans',
+            'min' => 0,
+            'max' => 6,
+        ],
+        [
+            'id' => '6_12',
+            'name' => '6 à 12 ans',
+            'min' => 6,
+            'max' => 13,
+        ],
+        [
+            'id' => '13_18',
+            'name' => '13 - 18 ans',
+            'min' => 13,
+            'max' => 18,
+        ],
+        [
+            'id' => '18_plus',
+            'name' => '18 ans et +',
+            'min' => 18,
+            'max' => null,
+        ],
+    ],
 
 ];

@@ -9,7 +9,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public function mount($id)
     {
         $this->patient = DossierPatient::findOrFail($id);
-        view()->share('current_patient', $id);
     }
 };
 ?>
@@ -19,7 +18,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
         ['label' => 'Dossiers patients', 'link' => 'patient.index', 'icon' => 'folder'],
         ['label' => $patient->nin, 'icon' => 'identification'],
-    ]" :patient="$patient" :current_patient="$current_patient">
+    ]" :patient="$patient" :current_patient="$patient->id">
         <x-slot name="title">Historique des facturations</x-slot>
         <x-slot name="subtitle">{{ ucfirst($patient->nom) }} {{ ucfirst($patient->postnom) }}
             {{ ucfirst($patient->prenom) }}</x-slot>

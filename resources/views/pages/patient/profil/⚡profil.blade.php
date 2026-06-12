@@ -1,223 +1,398 @@
 <?php
+
+use App\Models\Consultation;
 use App\Models\DossierPatient;
-use Livewire\Component;
+use Flux\Flux;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Component;
 
 new #[Layout('layouts::app.other.profil_medical')] class extends Component {
-    public $patient;
-    public function mount($id)
+    public DossierPatient $patient;
+
+    public array $tag_ids = [];
+
+    public bool $editingTags = false;
+
+    public function mount($id): void
     {
-        $this->patient = DossierPatient::findOrFail($id);
-        view()->share('current_patient', $id);
+        $this->patient = DossierPatient::query()
+            ->with(['tags', 'assurance', 'commune', 'ville', 'province'])
+            ->withCount('consultations')
+            ->findOrFail($id);
+
+        $this->tag_ids = $this->patient->tags->pluck('id')->map(fn ($tagId) => (string) $tagId)->all();
+    }
+
+    #[Computed]
+    public function lastConsultation(): ?Consultation
+    {
+        return Consultation::query()
+            ->where('dossier_patient_id', $this->patient->id)
+            ->with(['user:id,name', 'departement:id,name'])
+            ->latest('created_at')
+            ->first();
+    }
+
+    public function startEditingTags(): void
+    {
+        $this->tag_ids = $this->patient->tags->pluck('id')->map(fn ($tagId) => (string) $tagId)->all();
+        $this->editingTags = true;
+    }
+
+    public function cancelEditingTags(): void
+    {
+        $this->tag_ids = $this->patient->tags->pluck('id')->map(fn ($tagId) => (string) $tagId)->all();
+        $this->editingTags = false;
+    }
+
+    public function saveTags(): void
+    {
+        $validated = $this->validate([
+            'tag_ids' => 'nullable|array',
+            'tag_ids.*' => 'exists:tags,id',
+        ]);
+
+        $this->patient->tags()->sync($validated['tag_ids'] ?? []);
+        $this->patient->load('tags');
+        $this->editingTags = false;
+
+        Flux::toast(variant: 'success', heading: 'Tags mis à jour', text: 'Les étiquettes du dossier ont été enregistrées.');
     }
 };
 ?>
 
-<div class="transition-colors duration-300">
+<div class="mx-auto max-w-7xl space-y-6 transition-colors duration-300">
     <x-patient.patient-profil-header :nav="[
         ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
         ['label' => 'Dossiers patients', 'link' => 'patient.index', 'icon' => 'folder'],
         ['label' => $patient->nin, 'icon' => 'identification'],
-    ]" :patient="$patient" :current_patient="$current_patient">
+    ]" :patient="$patient" :current_patient="$patient->id">
         <x-slot name="title">{{ ucfirst($patient->nom) }} {{ ucfirst($patient->postnom) }}
             {{ ucfirst($patient->prenom) }}</x-slot>
-        <x-slot name="subtitle">ID: {{ $patient->nin }}
-            {{ $patient->ins ? 'N°' . $patient->ins : '' }}</x-slot>
+        <x-slot name="subtitle">NIN {{ $patient->nin }}{{ $patient->ins ? ' · INS ' . $patient->ins : '' }}</x-slot>
     </x-patient.patient-profil-header>
 
-    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div class="lg:col-span-4 space-y-6">
-            <div
-                class="bg-white dark:bg-slate-800 rounded-[2rem] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-slate-700 overflow-hidden">
-                <div class="h-32 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"></div>
-                <div class="px-6 pb-8 text-center">
-                    <div class="relative -mt-16 mb-4 inline-block">
-                        <img class="h-32 w-32 rounded-[2rem] object-cover border-4 border-white dark:border-slate-800 shadow-2xl mx-auto"
-                            src="{{ $patient->photo ? Storage::disk('public')->url($patient->photo) : 'https://ui-avatars.com/api/?background=6366f1&color=fff&name=' . $patient->prenom . '+' . $patient->nom }}"
-                            alt="Photo Patient">
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        {{-- Colonne identité --}}
+        <div class="space-y-6 xl:col-span-4">
+            <section
+                class="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                <div class="h-28 bg-linear-to-br from-indigo-600 via-violet-600 to-cyan-500"></div>
+                <div class="px-6 pb-6">
+                    <div class="relative -mt-14 mb-4 flex justify-center">
+                        <img class="size-28 rounded-[1.75rem] border-4 border-white object-cover shadow-xl dark:border-slate-900"
+                            src="{{ $patient->photo_url }}" alt="Photo de {{ $patient->full_name }}">
                         @if ($patient->is_dead)
-                            <div
-                                class="absolute -bottom-2 -right-2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded-lg border-2 border-white uppercase font-black tracking-tighter">
-                                Décédé</div>
+                            <span
+                                class="absolute -bottom-1 rounded-lg border-2 border-white bg-slate-900 px-2 py-0.5 text-[10px] font-black uppercase tracking-tight text-white dark:border-slate-900">
+                                Décédé
+                            </span>
                         @endif
                     </div>
 
-                    <h2 class="text-2xl font-black text-gray-900 dark:text-white">{{ Str::lower($patient->prenom) }}
-                        {{ Str::lower($patient->nom) }}</h2>
-                    <p class="text-indigo-600 dark:text-indigo-400 font-bold uppercase text-xs tracking-widest mt-1">
-                        {{ $patient->genre == 'M' ? 'Masculin' : 'Féminin' }} •
-                        {{ \Carbon\Carbon::parse($patient->date_naissance)->age }} Ans</p>
-
-                    <div class="mt-8 flex flex-col gap-3 text-left">
-                        <div class="flex items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-2xl">
-                            <div
-                                class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-xl shadow-sm mr-4">
-                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path
-                                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z">
-                                    </path>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Téléphone</p>
-                                <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">
-                                    {{ $patient->telephone ?? '+243 ...' }}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center p-3 bg-gray-50 dark:bg-slate-700/50 rounded-2xl">
-                            <div
-                                class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-xl shadow-sm mr-4">
-                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path
-                                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 01-2 2z">
-                                    </path>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Email</p>
-                                <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">
-                                    {{ $patient->email ?? 'Non renseigné' }}</p>
-                            </div>
-                        </div>
-                        <flux:button href="{{ route('patient.init_consult', $current_patient) }}" variant="primary"
-                            color="indigo" wire:navigate>Nouvelle consultation</flux:button>
+                    <div class="text-center">
+                        <h2 class="text-xl font-black text-slate-900 dark:text-white">
+                            {{ $patient->full_name }}
+                        </h2>
+                        <p class="mt-1 text-xs font-bold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-300">
+                            {{ $patient->genre === 'M' ? 'Masculin' : 'Féminin' }}
+                            @if ($patient->date_naissance)
+                                · {{ $patient->age }}
+                            @endif
+                        </p>
+                        @if ($patient->formatted_birthdate)
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                Né(e) le {{ $patient->formatted_birthdate }}
+                            </p>
+                        @endif
                     </div>
-                </div>
-            </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div
-                    class="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-transparent dark:border-slate-700 shadow-sm">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">Hémophile</p>
-                    <span
-                        class="px-2 py-1 {{ $patient->is_hemophile ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' }} text-[10px] rounded-lg font-black">
-                        {{ $patient->is_hemophile ? 'OUI' : 'NON' }}
-                    </span>
-                </div>
-                <div
-                    class="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-transparent dark:border-slate-700 shadow-sm">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">Anémique</p>
-                    <span
-                        class="px-2 py-1 {{ $patient->is_anemique ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' }} text-[10px] rounded-lg font-black">
-                        {{ $patient->is_anemique ? 'OUI' : 'NON' }}
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <div class="lg:col-span-8 space-y-6">
-
-            <div
-                class="bg-white dark:bg-slate-800 rounded-[2rem] p-8 shadow-sm border border-transparent dark:border-slate-700">
-                <div class="flex items-center mb-8">
-                    <div class="w-1.5 h-6 bg-indigo-600 rounded-full mr-3"></div>
-                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Filiation & Origines</h3>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <div class="relative p-6 rounded-2xl bg-indigo-50/50 dark:bg-slate-700/30">
-                        <span
-                            class="absolute -top-3 left-6 px-3 py-1 bg-indigo-600 text-white text-[10px] font-black rounded-full uppercase">Père</span>
-                        <h4 class="text-lg font-bold text-gray-800 dark:text-slate-200 mb-4">
-                            {{ ucfirst($patient->nom_pere) }}
-                        </h4>
-                        <div class="space-y-2 text-sm">
-                            <p class="flex justify-between text-gray-500 dark:text-slate-400 ">Province: <span
-                                    class="font-bold text-gray-700 dark:text-slate-200">{{ ucfirst($patient->province_pere ?? '-') }}</span>
-                            </p>
-                            <p class="flex justify-between text-gray-500 dark:text-slate-400">Profession: <span
-                                    class="font-bold text-gray-700 dark:text-slate-200">{{ ucfirst($patient->profession_pere ?? '-') }}</span>
-                            </p>
-                            <p class="flex justify-between text-gray-500 dark:text-slate-400 ">Tribu: <span
-                                    class="font-bold text-gray-700 dark:text-slate-200">{{ ucfirst($patient->tribut_pere ?? '-') }}</span>
-                            </p>
+                    <div class="mt-6 space-y-3">
+                        <div
+                            class="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+                            <flux:icon.phone class="size-5 text-slate-400" />
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Téléphone</p>
+                                <p class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ $patient->telephone ?? 'Non renseigné' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            class="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+                            <flux:icon.envelope class="size-5 text-slate-400" />
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
+                                <p class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ $patient->email ?? 'Non renseigné' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            class="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+                            <flux:icon.shield-check class="size-5 text-slate-400" />
+                            <div class="min-w-0">
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Couverture</p>
+                                <p class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ $patient->assurance?->name ?? 'Paiement direct' }}
+                                </p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="relative p-6 rounded-2xl bg-pink-50/50 dark:bg-slate-700/30">
-                        <span
-                            class="absolute -top-3 left-6 px-3 py-1 bg-pink-600 text-white text-[10px] font-black rounded-full uppercase">Mère</span>
-                        <h4 class="text-lg font-bold text-gray-800 dark:text-slate-200 mb-4">
-                            {{ ucfirst($patient->nom_mere) }}
-                        </h4>
-                        <div class="space-y-2 text-sm">
-                            <p class="flex justify-between text-gray-500 dark:text-slate-400">Province: <span
-                                    class="font-bold text-gray-700 dark:text-slate-200">{{ ucfirst($patient->province_mere ?? '-') }}</span>
-                            </p>
-                            <p class="flex justify-between text-gray-500 dark:text-slate-400">Profession: <span
-                                    class="font-bold text-gray-700 dark:text-slate-200">{{ ucfirst($patient->profession_mere ?? '-') }}</span>
-                            </p>
-                            <p class="flex justify-between text-gray-500 dark:text-slate-400">Tribu: <span
-                                    class="font-bold text-gray-700 dark:text-slate-200">{{ ucfirst($patient->tribut_mere ?? '-') }}</span>
-                            </p>
-                        </div>
-                    </div>
+                    <flux:button class="mt-6 w-full justify-center" href="{{ route('patient.init_consult', $patient->id) }}"
+                        variant="primary" color="indigo" icon="plus" wire:navigate>
+                        Nouvelle consultation
+                    </flux:button>
                 </div>
-            </div>
+            </section>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div
-                    class="bg-white dark:bg-slate-800 rounded-[2rem] p-6 shadow-sm border border-transparent dark:border-slate-700">
-                    <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Détails Naissance</h3>
+            {{-- Tags --}}
+            <section
+                class="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Profil clinique</p>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white">Tags du dossier</h3>
+                    </div>
+                    @if (! $editingTags)
+                        <flux:button size="sm" variant="subtle" icon="pencil-square" wire:click="startEditingTags">
+                            Modifier
+                        </flux:button>
+                    @endif
+                </div>
+
+                @if ($editingTags)
                     <div class="space-y-4">
-                        <div class="flex items-center justify-between">
-                            <span class="text-gray-500 dark:text-slate-400 text-sm">Poids de naissance</span>
-                            <span
-                                class="px-3 py-1 bg-gray-100 dark:bg-slate-700 rounded-full font-bold text-gray-800 dark:text-slate-200">{{ $patient->poids_naissance ?? 'N/A' }}
-                                kg</span>
+                        <x-select.styled label="Tags" wire:model="tag_ids" :request="route('api.tags')"
+                            select="label:name|value:id" multiple
+                            hint="Ex. hémophile, drépanocytaire, à risque…" />
+                        <div class="flex justify-end gap-2">
+                            <flux:button size="sm" variant="subtle" wire:click="cancelEditingTags">Annuler</flux:button>
+                            <flux:button size="sm" variant="primary" color="indigo" icon="check"
+                                wire:click="saveTags" wire:loading.attr="disabled">
+                                Enregistrer
+                            </flux:button>
                         </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-gray-500 dark:text-slate-400 text-sm">Rang dans la fratrie</span>
-                            <span
-                                class="text-indigo-600 dark:text-indigo-400 font-black">{{ $patient->rang_fratrie ?? '1' }}
-                                / {{ $patient->nb_freres + $patient->nb_soeurs + 1 }}</span>
+                    </div>
+                @else
+                    @if ($patient->tags->isEmpty())
+                        <div
+                            class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                            <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Aucun tag associé</p>
+                            <p class="mt-1 text-xs text-slate-400">Ajoutez des tags pour identifier le profil pathologique.</p>
                         </div>
+                    @else
+                        <div class="flex flex-wrap gap-2">
+                            @foreach ($patient->tags as $tag)
+                                <span
+                                    class="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+                                    {{ $tag->name }}
+                                </span>
+                            @endforeach
+                        </div>
+                    @endif
+                @endif
+            </section>
+
+            <section
+                class="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                <h3 class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Observations médicales</h3>
+                <blockquote
+                    class="mt-4 border-l-4 border-amber-400 pl-4 text-sm italic leading-relaxed text-slate-600 dark:text-slate-300">
+                    {{ $patient->note ? ucfirst($patient->note) : 'Aucune note clinique particulière pour ce dossier.' }}
+                </blockquote>
+            </section>
+        </div>
+
+        {{-- Colonne contenu --}}
+        <div class="space-y-6 xl:col-span-8">
+            {{-- Dernière consultation --}}
+            <section
+                class="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                <div
+                    class="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/80 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Synthèse</p>
+                        <h3 class="text-xl font-black text-slate-900 dark:text-white">Dernière consultation</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <span
+                            class="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            {{ number_format($patient->consultations_count) }} consultation(s)
+                        </span>
+                        @if ($this->lastConsultation)
+                            <flux:button size="sm" variant="subtle" icon="arrow-top-right-on-square"
+                                href="{{ route('consultation.show', $this->lastConsultation->id) }}" wire:navigate>
+                                Ouvrir
+                            </flux:button>
+                        @endif
                     </div>
                 </div>
 
-                <div
-                    class="bg-white dark:bg-slate-800 rounded-[2rem] p-6 shadow-sm border border-transparent dark:border-slate-700">
-                    <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Adresse Actuelle</h3>
-                    <p class="text-gray-800 dark:text-slate-200 font-medium">
-                        {{ $patient->num_habitation }}, Av. {{ $patient->avenue }}<br>
-                        Q. {{ $patient->quartier }}, C. {{ $patient->commune->name ?? '-' }}
-                    </p>
-                    <p class="text-xs text-indigo-500 mt-2 font-bold">{{ $patient->ville->name ?? '-' }},
-                        {{ $patient->province->name ?? '-' }}</p>
-                </div>
-            </div>
+                @if ($last = $this->lastConsultation)
+                    <div class="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-4">
+                        <x-analytics.kpi-card label="Date" :value="optional($last->created_at)->format('d/m/Y') ?? '-'" icon="calendar-days"
+                            tone="blue" />
+                        <x-analytics.kpi-card label="Référence" :value="$last->reference" icon="hashtag" tone="slate" />
+                        <x-analytics.kpi-card label="Département"
+                            :value="ucwords($last->departement?->name ?? '—')" icon="building-office-2" tone="cyan" />
+                        <x-analytics.kpi-card label="Médecin" :value="$last->user?->name ?? 'Non assigné'" icon="user-circle"
+                            tone="emerald" />
+                    </div>
 
-            <div
-                class="bg-white dark:bg-slate-800 rounded-[2rem] p-8 shadow-sm border border-transparent dark:border-slate-700">
-                <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Observations Médicales</h3>
-                <div class="relative">
-                    <div class="absolute -left-4 top-0 bottom-0 w-1 bg-amber-400 rounded-full"></div>
-                    <p class="text-gray-600 dark:text-slate-300 italic leading-relaxed pl-4">
-                        {{ ucfirst($patient->note ?? 'Aucune note clinique particulière pour ce dossier.') }}
-                    </p>
+                    <div class="grid gap-4 border-t border-slate-100 px-6 py-5 dark:border-slate-800 sm:grid-cols-2 xl:grid-cols-4">
+                        <x-analytics.kpi-card label="Poids"
+                            :value="$last->poids !== null ? $last->poids : '—'" suffix="{{ $last->poids !== null ? ' kg' : '' }}"
+                            icon="scale" tone="amber" />
+                        <x-analytics.kpi-card label="Température"
+                            :value="$last->temperature !== null ? $last->temperature : '—'"
+                            suffix="{{ $last->temperature !== null ? ' °C' : '' }}" icon="fire" tone="rose" />
+                        <x-analytics.kpi-card label="Pression artérielle"
+                            :value="($last->systolite && $last->diastolique) ? $last->systolite . '/' . $last->diastolique : '—'"
+                            suffix="{{ ($last->systolite && $last->diastolique) ? ' mmHg' : '' }}" icon="heart"
+                            tone="slate" />
+                        <x-analytics.kpi-card label="Statut"
+                            :value="$last->issue ? 'Clôturée' : 'En cours'" icon="clipboard-document-check"
+                            :tone="$last->issue ? 'slate' : 'emerald'" />
+                    </div>
+
+                    <div class="border-t border-slate-100 px-6 py-4 dark:border-slate-800">
+                        <div class="flex flex-wrap gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <span class="rounded-lg bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
+                                Type : {{ $last->type === 'depistage' ? 'Examen' : 'Visite médicale' }}
+                            </span>
+                            @if ($last->type_fichier)
+                                <span class="rounded-lg bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
+                                    Fiche : {{ ucfirst($last->type_fichier) }}
+                                </span>
+                            @endif
+                            @if ($last->mois)
+                                <span class="rounded-lg bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
+                                    Période : {{ $last->mois }}
+                                </span>
+                            @endif
+                            <span @class([
+                                'rounded-lg px-2.5 py-1',
+                                'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200' => $last->is_clore,
+                                'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200' => ! $last->is_clore,
+                            ])>
+                                Dossier {{ $last->is_clore ? 'classé' : 'ouvert' }}
+                            </span>
+                        </div>
+                    </div>
+                @else
+                    <div class="px-6 py-12 text-center">
+                        <flux:icon.clipboard-document-list class="mx-auto size-10 text-slate-300" />
+                        <p class="mt-3 text-sm font-semibold text-slate-600 dark:text-slate-300">Aucune consultation enregistrée</p>
+                        <p class="mt-1 text-xs text-slate-400">Créez une première visite pour alimenter ce résumé.</p>
+                    </div>
+                @endif
+            </section>
+
+            {{-- Filiation --}}
+            <section
+                class="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                <div class="mb-6 flex items-center gap-3">
+                    <div class="h-6 w-1.5 rounded-full bg-indigo-600"></div>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Filiation & origines</h3>
                 </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div class="relative rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 dark:border-indigo-500/20 dark:bg-indigo-500/5">
+                        <span
+                            class="absolute -top-3 left-5 rounded-full bg-indigo-600 px-3 py-0.5 text-[10px] font-black uppercase text-white">Père</span>
+                        <h4 class="text-base font-bold text-slate-900 dark:text-white">
+                            {{ ucfirst($patient->nom_pere ?? 'Non renseigné') }}
+                        </h4>
+                        <dl class="mt-4 space-y-2 text-sm">
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-slate-500">Province</dt>
+                                <dd class="font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ ucfirst($patient->province_pere ?? '—') }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-slate-500">Profession</dt>
+                                <dd class="font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ ucfirst($patient->profession_pere ?? '—') }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-slate-500">Tribu</dt>
+                                <dd class="font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ ucfirst($patient->tribut_pere ?? '—') }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <div class="relative rounded-2xl border border-pink-100 bg-pink-50/50 p-5 dark:border-pink-500/20 dark:bg-pink-500/5">
+                        <span
+                            class="absolute -top-3 left-5 rounded-full bg-pink-600 px-3 py-0.5 text-[10px] font-black uppercase text-white">Mère</span>
+                        <h4 class="text-base font-bold text-slate-900 dark:text-white">
+                            {{ ucfirst($patient->nom_mere ?? 'Non renseignée') }}
+                        </h4>
+                        <dl class="mt-4 space-y-2 text-sm">
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-slate-500">Province</dt>
+                                <dd class="font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ ucfirst($patient->province_mere ?? '—') }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-slate-500">Profession</dt>
+                                <dd class="font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ ucfirst($patient->profession_mere ?? '—') }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-slate-500">Tribu</dt>
+                                <dd class="font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ ucfirst($patient->tribut_mere ?? '—') }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </section>
+
+            <div class="grid gap-6 md:grid-cols-2">
+                <section
+                    class="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                    <h3 class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Naissance</h3>
+                    <dl class="mt-4 space-y-3 text-sm">
+                        <div class="flex items-center justify-between">
+                            <dt class="text-slate-500">Poids de naissance</dt>
+                            <dd class="font-bold text-slate-900 dark:text-white">{{ $patient->poids_naissance ?? 'N/A' }}
+                                kg</dd>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <dt class="text-slate-500">Rang dans la fratrie</dt>
+                            <dd class="font-black text-indigo-600 dark:text-indigo-300">
+                                {{ $patient->rang_fratrie ?? '1' }} /
+                                {{ ($patient->nb_freres ?? 0) + ($patient->nb_soeurs ?? 0) + 1 }}
+                            </dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section
+                    class="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                    <h3 class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Adresse actuelle</h3>
+                    <p class="mt-4 text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-100">
+                        {{ $patient->num_habitation ? 'N°' . $patient->num_habitation . ', ' : '' }}Av.
+                        {{ $patient->avenue ?? '—' }}<br>
+                        Q. {{ $patient->quartier ?? '—' }}, C. {{ $patient->commune?->name ?? '—' }}
+                    </p>
+                    <p class="mt-2 text-xs font-bold text-indigo-600 dark:text-indigo-300">
+                        {{ $patient->ville?->name ?? '—' }}, {{ $patient->province?->name ?? '—' }}
+                    </p>
+                </section>
             </div>
         </div>
     </div>
-    <div
-        class="max-w-7xl mx-auto mt-4 bg-white dark:bg-slate-800 rounded-[2rem] p-8 shadow-sm border border-transparent dark:border-slate-700">
-        <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Tags liés au dossier du patient</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            @foreach ($patient->tags as $tag)
-                <div class="relative">
-                    <div class="absolute -left-4 top-0 bottom-0 w-1 bg-amber-400 rounded-full"></div>
-                    <p class="text-gray-600 dark:text-slate-300 italic leading-relaxed pl-4">
-                        {{ $tag->name }}
-                    </p>
-                </div>
-            @endforeach
-        </div>
-    </div>
-    <h1 class="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight my-6">
-        Visite Programmée
-    </h1>
 
-    <livewire:visite-programme-for-patient-table :dossierPatientId="$patient->id" />
+    <section class="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+        <div class="mb-4">
+            <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Planification</p>
+            <h3 class="text-xl font-black text-slate-900 dark:text-white">Visites programmées</h3>
+        </div>
+        <livewire:visite-programme-for-patient-table :dossierPatientId="$patient->id" />
+    </section>
 </div>

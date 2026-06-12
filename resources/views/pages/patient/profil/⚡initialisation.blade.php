@@ -40,7 +40,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
         $this->patient = DossierPatient::findOrFail($id);
         $this->date_consultation = today()->format('Y-m-d');
-        view()->share('current_patient', $id);
     }
 
     protected function resolvedConsultationDate(): \Carbon\CarbonInterface

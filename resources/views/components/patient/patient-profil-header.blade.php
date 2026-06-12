@@ -1,4 +1,8 @@
-@props(['patient', 'current_patient', 'title', 'subtitle', 'nav' => []])
+@props(['patient', 'current_patient' => null, 'title', 'subtitle', 'nav' => []])
+
+@php
+    $current_patient = $current_patient ?? $patient->id;
+@endphp
 
 <section
     class="overflow-hidden rounded-[2rem] border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/70 to-slate-50 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 mb-6">
