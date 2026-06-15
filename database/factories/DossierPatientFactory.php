@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\DossierPatient;
+use App\Services\Patient\PremierSigneService;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -11,6 +12,26 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class DossierPatientFactory extends Factory
 {
     protected $model = DossierPatient::class;
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (DossierPatient $patient) {
+            $service = app(PremierSigneService::class);
+            $form = [];
+
+            foreach ($service->definitions() as $definition) {
+                $present = fake()->boolean(75);
+
+                $form[$definition->key] = [
+                    'present' => $present ? 1 : 0,
+                    'value' => $present ? fake()->numberBetween(0, 12) : null,
+                    'comment' => fake()->optional(0.35)->sentence(),
+                ];
+            }
+
+            $service->sync($patient, $form);
+        });
+    }
 
     /**
      * @return array<string, mixed>
@@ -63,14 +84,6 @@ class DossierPatientFactory extends Factory
             'duree_prise' => fake()->optional()->randomElement(['7 jours', '14 jours', '1 mois']),
             'vaccins' => fake()->optional()->sentence(),
             'histoire_perso_supplementaire' => fake()->optional()->paragraph(),
-            'syndrome_mains_pieds' => fake()->numberBetween(0, 5),
-            'fievre' => fake()->numberBetween(0, 5),
-            'itere' => fake()->numberBetween(0, 5),
-            'cvo' => fake()->numberBetween(0, 5),
-            'transfusion' => fake()->numberBetween(0, 5),
-            'nbr_transfusion' => fake()->numberBetween(0, 10),
-            'episodes_epistaxis' => fake()->numberBetween(0, 10),
-            'nbr_cvo_an' => fake()->numberBetween(0, 12),
             'premier_signes_supplementaires' => fake()->optional()->sentence(),
             'antecedents_medicales' => fake()->optional()->words(3, true),
             'antecedents_chirurgicaux' => fake()->optional()->words(3, true),

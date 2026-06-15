@@ -1,61 +1,64 @@
 <?php
+
 use App\Models\DossierPatient;
-use Livewire\Component;
-use Livewire\Attributes\Layout;
+use App\Models\Localisations\Country;
+use App\Models\Localisations\Province;
+use App\Services\Patient\PremierSigneService;
 use Flux\Flux;
+use Livewire\Attributes\Layout;
+use Livewire\Component;
 
 new #[Layout('layouts::app.other.profil_medical')] class extends Component {
-    public $patient;
-    public $update_demographiques = false;
-    public $update_histoire_familiale = false;
-    public $update_histoire_personnelle = false;
-    public $update_histoire_maladie = false;
-    public $update_autres_antecedents = false;
-    public $update_localisation = false;
+    public DossierPatient $patient;
+
+    public ?string $activeSection = null;
 
     public $photo = null;
     public $nom, $postnom, $prenom, $genre, $email, $telephone, $ins;
     public $etat_civil = 'Célibataire';
     public $date_naissance;
 
-    // --- Santé / Naissance ---
     public $poids_naissance;
     public $note;
 
-    // --- Localisation ---
     public $province_id, $ville_id, $commune_id, $country_id, $user_id, $assurance_id, $categorisation_id;
     public $quartier, $avenue, $num_habitation, $adresses_supplementaires;
 
-    // --- Parents ---
     public $nom_pere, $nom_mere;
     public $province_pere, $tribut_pere, $profession_pere;
     public $province_mere, $tribut_mere, $profession_mere;
 
-    // --- Fratrie & Famille ---
-    public $type_famille = 'Monogame',
-        $rang_fratrie = 1;
+    public $type_famille = 'Monogame', $rang_fratrie = 1;
     public $nb_freres, $nb_soeurs;
     public $deces_freres, $deces_soeurs;
     public $histoire_famille_supplementaire;
 
-    // --- Histoire personnelle ---
     public $age_gestationnel, $allaitement_maternel, $med_traditionnel, $moringa_oleifera;
     public $indications, $duree_prise;
     public $vaccins;
     public $histoire_perso_supplementaire;
 
-    // --- Histoire de la maladie ---
-    public $syndrome_mains_pieds, $fievre, $itere, $cvo;
-    public $transfusion, $nbr_transfusion, $episodes_epistaxis, $nbr_cvo_an;
+    public array $premierSignesForm = [];
     public $premier_signes_supplementaires;
 
-    // --- Autres antecedents ---
     public $antecedents_medicales, $antecedents_chirurgicaux, $antecedents_familiaux, $antecedents_obstetricaux, $antecedents_gynocola, $antecedents_neurologiques, $antecedents_cardiovasculaires, $antecedents_digestifs, $antecedents_endocrinologiques, $antecedents_hematologiques, $antecedents_supplementaires;
     public $tag_ids = [];
 
-    public function mount($id)
+    public function mount($id): void
     {
-        $this->patient = DossierPatient::findOrFail($id);
+        $this->loadPatient($id);
+        $this->syncFromPatient();
+    }
+
+    protected function loadPatient(int $id): void
+    {
+        $this->patient = DossierPatient::query()
+            ->with(['province', 'ville', 'commune', 'allergies', 'premierSignes.definition'])
+            ->findOrFail($id);
+    }
+
+    public function syncFromPatient(): void
+    {
         $this->nom = $this->patient->nom;
         $this->postnom = $this->patient->postnom;
         $this->prenom = $this->patient->prenom;
@@ -70,7 +73,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->country_id = $this->patient->country_id;
         $this->note = $this->patient->note;
 
-        //
         $this->nom_pere = $this->patient->nom_pere;
         $this->profession_pere = $this->patient->profession_pere;
         $this->province_pere = $this->patient->province_pere;
@@ -86,7 +88,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->deces_soeurs = $this->patient->deces_soeurs;
         $this->histoire_famille_supplementaire = $this->patient->histoire_famille_supplementaire;
 
-        //
         $this->age_gestationnel = $this->patient->age_gestationnel;
         $this->allaitement_maternel = $this->patient->allaitement_maternel;
         $this->med_traditionnel = $this->patient->med_traditionnel;
@@ -96,18 +97,9 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->vaccins = $this->patient->vaccins;
         $this->histoire_perso_supplementaire = $this->patient->histoire_perso_supplementaire;
 
-        //
-        $this->syndrome_mains_pieds = $this->patient->syndrome_mains_pieds;
-        $this->fievre = $this->patient->fievre;
-        $this->itere = $this->patient->itere;
-        $this->cvo = $this->patient->cvo;
-        $this->transfusion = $this->patient->transfusion;
-        $this->nbr_transfusion = $this->patient->nbr_transfusion;
-        $this->episodes_epistaxis = $this->patient->episodes_epistaxis;
-        $this->nbr_cvo_an = $this->patient->nbr_cvo_an;
         $this->premier_signes_supplementaires = $this->patient->premier_signes_supplementaires;
+        $this->premierSignesForm = app(PremierSigneService::class)->toFormArray($this->patient);
 
-        //
         $this->antecedents_medicales = $this->patient->antecedents_medicales;
         $this->antecedents_chirurgicaux = $this->patient->antecedents_chirurgicaux;
         $this->antecedents_familiaux = $this->patient->antecedents_familiaux;
@@ -118,19 +110,38 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->antecedents_digestifs = $this->patient->antecedents_digestifs;
         $this->antecedents_endocrinologiques = $this->patient->antecedents_endocrinologiques;
         $this->antecedents_hematologiques = $this->patient->antecedents_hematologiques;
+        $this->antecedents_supplementaires = $this->patient->antecedents_supplementaires;
         $this->adresses_supplementaires = $this->patient->adresses_supplementaires;
 
-        //
         $this->province_id = $this->patient->province_id;
         $this->ville_id = $this->patient->ville_id;
         $this->commune_id = $this->patient->commune_id;
         $this->quartier = $this->patient->quartier;
         $this->avenue = $this->patient->avenue;
         $this->num_habitation = $this->patient->num_habitation;
-
     }
 
-    public function updateDemographiques()
+    public function openSection(string $section): void
+    {
+        $this->resetValidation();
+        $this->activeSection = $section;
+        $this->syncFromPatient();
+    }
+
+    public function sectionTitle(?string $section = null): string
+    {
+        return match ($section ?? $this->activeSection) {
+            'demographiques' => 'Données démographiques',
+            'histoire_familiale' => 'Histoire familiale',
+            'histoire_personnelle' => 'Histoire personnelle',
+            'histoire_maladie' => 'Histoire de la maladie',
+            'autres_antecedents' => 'Autres antécédents',
+            'localisation' => 'Localisation actuelle',
+            default => 'Modifier la fiche',
+        };
+    }
+
+    public function updateDemographiques(): void
     {
         try {
             $validated = $this->validate([
@@ -150,20 +161,14 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             ]);
 
             $this->patient->update($validated);
-
-            // Réinitialiser le mode édition
-            $this->update_demographiques = false;
-
-            // Afficher le toast de succès
-            Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: 'Les données démographiques ont été mises à jour avec succès!');
+            $this->afterSectionSave('Les données démographiques ont été mises à jour.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Afficher le toast d'erreur
-            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Une erreur est survenue : ' . $e->getMessage());
+            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs obligatoires.');
             throw $e;
         }
     }
 
-    public function updateHistoireFamiliale()
+    public function updateHistoireFamiliale(): void
     {
         try {
             $validated = $this->validate([
@@ -184,20 +189,14 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             ]);
 
             $this->patient->update($validated);
-
-            // Réinitialiser le mode édition
-            $this->update_histoire_familiale = false;
-
-            // Afficher le toast de succès
-            Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: "L'histoire familiale a été mise à jour avec succès!");
+            $this->afterSectionSave("L'histoire familiale a été mise à jour.");
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Afficher le toast d'erreur
-            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Une erreur est survenue : ' . $e->getMessage());
+            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
             throw $e;
         }
     }
 
-    public function updateHistoirePersonnelle()
+    public function updateHistoirePersonnelle(): void
     {
         try {
             $validated = $this->validate([
@@ -212,49 +211,33 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             ]);
 
             $this->patient->update($validated);
-
-            // Réinitialiser le mode édition
-            $this->update_histoire_personnelle = false;
-
-            // Afficher le toast de succès
-            Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: "L'histoire personnelle a été mise à jour avec succès!");
+            $this->afterSectionSave("L'histoire personnelle a été mise à jour.");
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Afficher le toast d'erreur
-            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Une erreur est survenue : ' . $e->getMessage());
+            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
             throw $e;
         }
     }
 
-    public function updateHistoireMaladie()
+    public function updateHistoireMaladie(): void
     {
         try {
-            $validated = $this->validate([
-                'syndrome_mains_pieds' => 'nullable|integer|min:0',
-                'fievre' => 'nullable|integer|min:0',
-                'itere' => 'nullable|integer|min:0',
-                'cvo' => 'nullable|integer|min:0',
-                'transfusion' => 'nullable|integer|min:0',
-                'nbr_transfusion' => 'nullable|integer|min:0',
-                'episodes_epistaxis' => 'nullable|integer|min:0',
-                'nbr_cvo_an' => 'nullable|integer|min:0',
-                'premier_signes_supplementaires' => 'nullable|string',
+            $service = app(PremierSigneService::class);
+            $this->validate($service->validationRules());
+
+            $service->sync($this->patient, $this->premierSignesForm);
+
+            $this->patient->update([
+                'premier_signes_supplementaires' => $this->premier_signes_supplementaires ?: null,
             ]);
 
-            $this->patient->update($validated);
-
-            // Réinitialiser le mode édition
-            $this->update_histoire_maladie = false;
-
-            // Afficher le toast de succès
-            Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: "L'histoire de la maladie a été mise à jour avec succès!");
+            $this->afterSectionSave("L'histoire de la maladie a été mise à jour.");
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Afficher le toast d'erreur
-            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Une erreur est survenue : ' . $e->getMessage());
+            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les valeurs numériques saisies.');
             throw $e;
         }
     }
 
-    public function updateAutresAntecedents()
+    public function updateAutresAntecedents(): void
     {
         try {
             $validated = $this->validate([
@@ -268,24 +251,18 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'antecedents_digestifs' => 'nullable|string',
                 'antecedents_endocrinologiques' => 'nullable|string',
                 'antecedents_hematologiques' => 'nullable|string',
-                'adresses_supplementaires' => 'nullable|string',
+                'antecedents_supplementaires' => 'nullable|string',
             ]);
 
             $this->patient->update($validated);
-
-            // Réinitialiser le mode édition
-            $this->update_autres_antecedents = false;
-
-            // Afficher le toast de succès
-            Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: 'Les autres antecedents ont été mise à jour avec succès!');
+            $this->afterSectionSave('Les antécédents ont été mis à jour.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Afficher le toast d'erreur
-            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Une erreur est survenue : ' . $e->getMessage());
+            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
             throw $e;
         }
     }
 
-    public function updateLocalisation()
+    public function updateLocalisation(): void
     {
         try {
             $validated = $this->validate([
@@ -299,22 +276,25 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             ]);
 
             $this->patient->update($validated);
-
-            // Réinitialiser le mode édition
-            $this->update_localisation = false;
-
-            // Afficher le toast de succès
-            Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: 'La localisation a été mise à jour avec succès!');
+            $this->afterSectionSave('La localisation a été mise à jour.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Afficher le toast d'erreur
-            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Une erreur est survenue : ' . $e->getMessage());
+            Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
             throw $e;
         }
     }
 
+    protected function afterSectionSave(string $message): void
+    {
+        $this->loadPatient($this->patient->id);
+        $this->syncFromPatient();
+        $this->activeSection = null;
+        $this->dispatch('fiche-medicale-saved');
+        Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: $message);
+    }
+
     protected function isFilled(mixed $value): bool
     {
-        return !is_null($value) && $value !== '' && $value !== [];
+        return ! is_null($value) && $value !== '' && $value !== [];
     }
 
     protected function isAnyFilled(array $values): bool
@@ -328,40 +308,166 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         return false;
     }
 
+    public function display(mixed $value, string $empty = '—'): string
+    {
+        return $this->isFilled($value) ? (string) $value : $empty;
+    }
+
+    public function displayBool(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return (bool) $value ? 'Oui' : 'Non';
+    }
+
+    public function displayGenre(?string $genre): string
+    {
+        return match ($genre) {
+            'M' => 'Homme',
+            'F' => 'Femme',
+            default => '—',
+        };
+    }
+
+    public function displayDate($value): string
+    {
+        if (! $value) {
+            return '—';
+        }
+
+        return $value instanceof \DateTimeInterface
+            ? $value->format('d/m/Y')
+            : (string) $value;
+    }
+
+    public function provinceLabel(mixed $provinceId): string
+    {
+        if (! $this->isFilled($provinceId)) {
+            return '—';
+        }
+
+        return Province::query()->whereKey($provinceId)->value('name') ?? '—';
+    }
+
+    public function countryLabel(): string
+    {
+        if (! $this->isFilled($this->patient->country_id)) {
+            return '—';
+        }
+
+        return Country::query()->whereKey($this->patient->country_id)->value('name') ?? '—';
+    }
+
+    public function vaccinTags(): array
+    {
+        if (! $this->isFilled($this->vaccins)) {
+            return [];
+        }
+
+        return collect(explode(',', (string) $this->vaccins))
+            ->map(fn ($tag) => trim($tag))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public function antecedentFields(): array
+    {
+        return [
+            'antecedents_medicales' => 'Médicaux',
+            'antecedents_chirurgicaux' => 'Chirurgicaux',
+            'antecedents_familiaux' => 'Familiaux',
+            'antecedents_obstetricaux' => 'Obstétricaux',
+            'antecedents_gynocola' => 'Gynécologiques',
+            'antecedents_neurologiques' => 'Neurologiques',
+            'antecedents_cardiovasculaires' => 'Cardiovasculaires',
+            'antecedents_digestifs' => 'Digestifs',
+            'antecedents_endocrinologiques' => 'Endocrinologiques',
+            'antecedents_hematologiques' => 'Hématologiques',
+            'antecedents_supplementaires' => 'Compléments',
+        ];
+    }
+
     public function isIncompleteDemographiques(): bool
     {
-        return !$this->isFilled($this->nom) || !$this->isFilled($this->prenom) || !$this->isFilled($this->genre) || !$this->isFilled($this->date_naissance) || !$this->isFilled($this->type_famille) || !$this->isFilled($this->country_id);
+        return ! $this->isFilled($this->nom) || ! $this->isFilled($this->prenom) || ! $this->isFilled($this->genre) || ! $this->isFilled($this->date_naissance) || ! $this->isFilled($this->type_famille) || ! $this->isFilled($this->country_id);
     }
 
     public function isIncompleteHistoireFamiliale(): bool
     {
-        return !$this->isFilled($this->nom_pere) || !$this->isFilled($this->province_pere) || !$this->isFilled($this->nom_mere) || !$this->isFilled($this->province_mere);
+        return ! $this->isFilled($this->nom_pere) || ! $this->isFilled($this->province_pere) || ! $this->isFilled($this->nom_mere) || ! $this->isFilled($this->province_mere);
     }
 
     public function isIncompleteHistoirePersonnelle(): bool
     {
-        return !$this->isFilled($this->age_gestationnel) || !$this->isFilled($this->allaitement_maternel) || !$this->isFilled($this->med_traditionnel) || !$this->isFilled($this->moringa_oleifera);
+        return ! $this->isFilled($this->age_gestationnel) || ! $this->isFilled($this->allaitement_maternel) || ! $this->isFilled($this->med_traditionnel) || ! $this->isFilled($this->moringa_oleifera);
+    }
+
+    public function premierSigneRows()
+    {
+        return app(PremierSigneService::class)->presentationRows($this->patient);
+    }
+
+    public function premierSigneProgress(): array
+    {
+        return app(PremierSigneService::class)->progress($this->patient);
     }
 
     public function isIncompleteHistoireMaladie(): bool
     {
-        return !$this->isFilled($this->syndrome_mains_pieds) || !$this->isFilled($this->fievre) || !$this->isFilled($this->itere) || !$this->isFilled($this->cvo) || !$this->isFilled($this->transfusion) || !$this->isFilled($this->nbr_transfusion) || !$this->isFilled($this->episodes_epistaxis) || !$this->isFilled($this->nbr_cvo_an);
+        return app(PremierSigneService::class)->isIncomplete($this->patient);
     }
 
     public function isIncompleteAutresAntecedents(): bool
     {
-        return !$this->isAnyFilled([$this->antecedents_medicales, $this->antecedents_chirurgicaux, $this->antecedents_familiaux, $this->antecedents_obstetricaux, $this->antecedents_gynocola, $this->antecedents_neurologiques, $this->antecedents_cardiovasculaires, $this->antecedents_digestifs, $this->antecedents_endocrinologiques, $this->antecedents_hematologiques, $this->antecedents_supplementaires]);
+        return ! $this->isAnyFilled([
+            $this->antecedents_medicales,
+            $this->antecedents_chirurgicaux,
+            $this->antecedents_familiaux,
+            $this->antecedents_obstetricaux,
+            $this->antecedents_gynocola,
+            $this->antecedents_neurologiques,
+            $this->antecedents_cardiovasculaires,
+            $this->antecedents_digestifs,
+            $this->antecedents_endocrinologiques,
+            $this->antecedents_hematologiques,
+            $this->antecedents_supplementaires,
+        ]);
     }
 
     public function isIncompleteLocalisation(): bool
     {
-        return !$this->isFilled($this->province_id) || !$this->isFilled($this->ville_id) || !$this->isFilled($this->commune_id) || !$this->isFilled($this->quartier) || !$this->isFilled($this->avenue) || !$this->isFilled($this->num_habitation);
+        return ! $this->isFilled($this->province_id) || ! $this->isFilled($this->ville_id) || ! $this->isFilled($this->commune_id) || ! $this->isFilled($this->quartier) || ! $this->isFilled($this->avenue) || ! $this->isFilled($this->num_habitation);
+    }
+
+    public function completionSummary(): array
+    {
+        $sections = [
+            ['key' => 'demographiques', 'label' => 'Démographie', 'complete' => ! $this->isIncompleteDemographiques()],
+            ['key' => 'histoire_familiale', 'label' => 'Famille', 'complete' => ! $this->isIncompleteHistoireFamiliale()],
+            ['key' => 'histoire_personnelle', 'label' => 'Personnel', 'complete' => ! $this->isIncompleteHistoirePersonnelle()],
+            ['key' => 'histoire_maladie', 'label' => 'Maladie', 'complete' => ! $this->isIncompleteHistoireMaladie()],
+            ['key' => 'autres_antecedents', 'label' => 'Antécédents', 'complete' => ! $this->isIncompleteAutresAntecedents()],
+            ['key' => 'localisation', 'label' => 'Adresse', 'complete' => ! $this->isIncompleteLocalisation()],
+        ];
+
+        $completed = collect($sections)->where('complete', true)->count();
+
+        return [
+            'sections' => $sections,
+            'completed' => $completed,
+            'total' => count($sections),
+            'percent' => (int) round(($completed / count($sections)) * 100),
+        ];
     }
 };
 ?>
 
-<div class="mx-auto max-w-7xl space-y-6">
+@php($summary = $this->completionSummary())
 
+<div class="mx-auto max-w-7xl space-y-6">
     <x-patient.patient-profil-header :nav="[
         ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
         ['label' => 'Dossiers patients', 'link' => 'patient.index', 'icon' => 'folder'],
@@ -371,392 +477,423 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
             {{ ucfirst($patient->prenom) }}</x-slot>
     </x-patient.patient-profil-header>
 
-    <div class="space-y-6">
-        <x-card header="Données démographiques" minimize loading="updateDemographiques"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70 {{ $this->isIncompleteDemographiques() ? 'ring-1 ring-amber-300/70 dark:ring-amber-500/30' : '' }}">
-            @if ($this->isIncompleteDemographiques())
+    <section
+        class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+        <div class="bg-linear-to-r from-indigo-600 via-violet-600 to-sky-500 px-5 py-5 sm:px-6">
+            <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-white/70">Fiche médicale</p>
+                    <h2 class="mt-1 text-2xl font-black text-white">Synthèse du dossier clinique</h2>
+                    <p class="mt-1 text-sm text-white/80">
+                        Consultation rapide des informations — modification par section via modale.
+                    </p>
+                </div>
+                <div class="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-right backdrop-blur-sm">
+                    <p class="text-3xl font-black text-white">{{ $summary['percent'] }}%</p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-white/80">
+                        {{ $summary['completed'] }}/{{ $summary['total'] }} sections
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid gap-2 border-t border-slate-100 p-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-slate-800">
+            @foreach ($summary['sections'] as $item)
+                <div @class([
+                    'rounded-xl border px-3 py-2.5 text-center',
+                    'border-emerald-200 bg-emerald-50/80 dark:border-emerald-500/20 dark:bg-emerald-950/20' => $item['complete'],
+                    'border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-950/20' => ! $item['complete'],
+                ])>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        {{ $item['label'] }}
+                    </p>
+                    <p @class([
+                        'mt-1 text-xs font-bold',
+                        'text-emerald-700 dark:text-emerald-300' => $item['complete'],
+                        'text-amber-700 dark:text-amber-300' => ! $item['complete'],
+                    ])>
+                        {{ $item['complete'] ? 'Complet' : 'Incomplet' }}
+                    </p>
+                </div>
+            @endforeach
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <x-patient.fiche-section title="Données démographiques" icon="identification" accent="indigo"
+            section="demographiques" :incomplete="$this->isIncompleteDemographiques()"
+            incomplete-message="Identité et données de naissance à compléter">
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <x-patient.fiche-field label="Nom" :value="ucfirst((string) $nom)" :missing="!filled($nom)" />
+                <x-patient.fiche-field label="Post-nom" :value="$this->display($postnom)" />
+                <x-patient.fiche-field label="Prénom" :value="ucfirst((string) $prenom)" :missing="!filled($prenom)" />
+                <x-patient.fiche-field label="État civil" :value="$this->display($etat_civil)" />
+                <x-patient.fiche-field label="Date de naissance" :value="$this->displayDate($date_naissance)" :missing="!filled($date_naissance)" />
+                <x-patient.fiche-field label="Genre" :value="$this->displayGenre($genre)" :missing="!filled($genre)" />
+                <x-patient.fiche-field label="Poids de naissance" :value="filled($poids_naissance) ? $poids_naissance . ' kg' : '—'" />
+                <x-patient.fiche-field label="N° identité santé" :value="$this->display($ins)" />
+                <x-patient.fiche-field label="Type de famille" :value="$this->display($type_famille)" :missing="!filled($type_famille)" />
+                <x-patient.fiche-field label="Pays de naissance" :value="$this->countryLabel()" :missing="!filled($country_id)" />
+                <x-patient.fiche-field label="Téléphone" :value="$this->display($telephone)" />
+                <x-patient.fiche-field label="E-mail" :value="$this->display($email)" />
+            </div>
+            @if (filled($note))
                 <div
-                    class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                    Informations incomplètes : compléter les champs essentiels.
+                    class="mt-5 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Note complémentaire</p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{{ $note }}</p>
                 </div>
             @endif
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <x-input label="Nom !" wire:model="nom" placeholder="Entrez le nom du patient" :readonly="!$update_demographiques" />
-                <x-input label="Post-nom" wire:model="postnom" placeholder="Entrez le post-nom du patient"
-                    :readonly="!$update_demographiques" />
-                <x-input label="Prénom !" wire:model="prenom" placeholder="Entrez le prénom du patient"
-                    :readonly="!$update_demographiques" />
-                <x-select.styled :readonly="!$update_demographiques" label="Etat civil !" wire:model="etat_civil"
-                    placeholder="Sélectionnez" required :options="[
-                        ['label' => 'Célibataire', 'value' => 'Célibataire'],
-                        ['label' => 'Marié', 'value' => 'Marié'],
-                        ['label' => 'Divorsé', 'value' => 'Divorsé'],
-                        ['label' => 'Veu(f)ve', 'value' => 'Veu(f)ve'],
-                    ]" />
-            </div>
+        </x-patient.fiche-section>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <x-date disabled wire:model="date_naissance" label="Date de naissance !"
-                    placeholder="Date de naissance" />
-                <x-number wire:model="poids_naissance" label="Poids de naissance (Kg)" step="0.1" chevron
-                    :readonly="!$update_demographiques" />
-                <x-select.styled :readonly="!$update_demographiques" label="Genre !" wire:model="genre" required :options="[['label' => 'Homme', 'value' => 'M'], ['label' => 'Femme', 'value' => 'F']]" />
-                <x-input label="N° Identité santé" wire:model="ins" placeholder="N° identité" :readonly="!$update_demographiques" />
+        <x-patient.fiche-section title="Localisation actuelle" icon="map-pin" accent="emerald" section="localisation"
+            :incomplete="$this->isIncompleteLocalisation()"
+            incomplete-message="Adresse et localisation géographique incomplètes">
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <x-patient.fiche-field label="Province" :value="$patient->province?->name ?? '—'" :missing="!filled($province_id)" />
+                <x-patient.fiche-field label="Ville" :value="$patient->ville?->name ?? '—'" :missing="!filled($ville_id)" />
+                <x-patient.fiche-field label="Commune" :value="$patient->commune?->name ?? '—'" :missing="!filled($commune_id)" />
+                <x-patient.fiche-field label="Quartier" :value="$this->display($quartier)" :missing="!filled($quartier)" />
+                <x-patient.fiche-field label="Avenue" :value="$this->display($avenue)" :missing="!filled($avenue)" />
+                <x-patient.fiche-field label="N° habitation" :value="$this->display($num_habitation)" :missing="!filled($num_habitation)" />
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <x-select.styled :readonly="!$update_demographiques" wire:model="type_famille" label="Type de famille !" required
-                    :options="['Monogame', 'Polygame', 'Recomposée', 'Adaptative', 'Orphelinat']" />
-                <x-select.styled :readonly="!$update_demographiques" wire:model="country_id" label="Pays de naissance !"
-                    :request="route('api.countries')" select="label:name|value:id" required />
-                <x-input :readonly="!$update_demographiques" wire:model="telephone" label="Téléphone" />
-                <x-input wire:model="email" label="E-mail" placeholder="email@exemple.com" :readonly="!$update_demographiques" />
-            </div>
-            <x-textarea wire:model="note" label="Infos supplémentaires" placeholder="Note ici..." maxlength="500" count
-                :readonly="!$update_demographiques" />
-            <div
-                class="mt-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                <label class="flex items-start gap-3">
-                    <x-toggle wire:model.live="update_demographiques" wire:loading.attr="disabled" />
-                    <div class="flex justify-between w-full">
-                        <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Coché pour modifier les données
-                        </p>
-                        <flux:icon.loading wire:loading wire:target="update_demographiques" />
-                    </div>
-                </label>
-            </div>
-
-            @if ($update_demographiques)
-                <x-slot:footer>
-                    <div class="flex justify-end">
-                        <flux:button variant="primary" icon="save" wire:click="updateDemographiques" color="indigo">
-                            Enregistrer les modifications
-                        </flux:button>
-                    </div>
-                </x-slot:footer>
-            @endif
-        </x-card>
-
-        <x-card header="Histoire familiale" minimize="mount"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            @if ($this->isIncompleteHistoireFamiliale())
+            @if (filled($adresses_supplementaires))
                 <div
-                    class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                    Données familiales incomplètes : compléter noms et provinces des parents.
+                    class="mt-5 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Adresses
+                        supplémentaires</p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                        {{ $adresses_supplementaires }}</p>
                 </div>
             @endif
-            <div
-                class="flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-gray-700">
-                <div class="flex-1 pb-6 lg:pb-0 lg:pr-4">
-                    <flux:subheading size="lg" class="mb-4 px-2">Père</flux:subheading>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <x-input label="Nom du père !" wire:model="nom_pere" :readonly="!$update_histoire_familiale" />
-                        <x-input label="Profession" wire:model="profession_pere" :readonly="!$update_histoire_familiale" />
-                        <x-select.styled label="Province d'origine !" wire:model="province_pere" :request="route('api.provinces')"
-                            select="label:name|value:id" :readonly="!$update_histoire_familiale" />
-                        <x-input label="Tribu" wire:model="tribut_pere" :readonly="!$update_histoire_familiale" />
+        </x-patient.fiche-section>
+
+        <x-patient.fiche-section title="Histoire familiale" icon="users" accent="violet" section="histoire_familiale"
+            :incomplete="$this->isIncompleteHistoireFamiliale()"
+            incomplete-message="Informations sur les parents à compléter">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div class="space-y-4 rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-600 dark:text-violet-300">Père
+                    </p>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <x-patient.fiche-field label="Nom" :value="$this->display($nom_pere)" :missing="!filled($nom_pere)" />
+                        <x-patient.fiche-field label="Profession" :value="$this->display($profession_pere)" />
+                        <x-patient.fiche-field label="Province" :value="$this->provinceLabel($province_pere)" :missing="!filled($province_pere)" />
+                        <x-patient.fiche-field label="Tribu" :value="$this->display($tribut_pere)" />
                     </div>
                 </div>
-
-                <div class="flex-1 pt-6 lg:pt-0 lg:pl-4">
-                    <flux:subheading size="lg" class="mb-4 px-2">Mère</flux:subheading>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <x-input label="Nom de la mère !" wire:model="nom_mere" :readonly="!$update_histoire_familiale" />
-                        <x-input label="Profession" wire:model="profession_mere" :readonly="!$update_histoire_familiale" />
-                        <x-select.styled label="Province d'origine !" wire:model="province_mere" :request="route('api.provinces')"
-                            select="label:name|value:id" :readonly="!$update_histoire_familiale" />
-                        <x-input label="Tribu" wire:model="tribut_mere" :readonly="!$update_histoire_familiale" />
+                <div class="space-y-4 rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
+                    <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-600 dark:text-violet-300">Mère
+                    </p>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <x-patient.fiche-field label="Nom" :value="$this->display($nom_mere)" :missing="!filled($nom_mere)" />
+                        <x-patient.fiche-field label="Profession" :value="$this->display($profession_mere)" />
+                        <x-patient.fiche-field label="Province" :value="$this->provinceLabel($province_mere)" :missing="!filled($province_mere)" />
+                        <x-patient.fiche-field label="Tribu" :value="$this->display($tribut_mere)" />
                     </div>
                 </div>
             </div>
-
-            <div class="my-6">
-                <flux:separator />
+            <div class="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-5">
+                <x-patient.fiche-field label="Rang fratrie" :value="$this->display($rang_fratrie)" />
+                <x-patient.fiche-field label="Frères vivants" :value="$this->display($nb_freres)" />
+                <x-patient.fiche-field label="Sœurs vivantes" :value="$this->display($nb_soeurs)" />
+                <x-patient.fiche-field label="Frères décédés" :value="$this->display($deces_freres)" />
+                <x-patient.fiche-field label="Sœurs décédées" :value="$this->display($deces_soeurs)" />
             </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-                <x-number label="Rang Fratrie" wire:model="rang_fratrie" :readonly="!$update_histoire_familiale" />
-                <x-number label="Frères vivants" wire:model="nb_freres" :readonly="!$update_histoire_familiale" />
-                <x-number label="Soeurs vivantes" wire:model="nb_soeurs" :readonly="!$update_histoire_familiale" />
-                <x-number label="Frères décédés" wire:model="deces_freres" :readonly="!$update_histoire_familiale" />
-                <x-number label="Soeurs décédées" wire:model="deces_soeurs" :readonly="!$update_histoire_familiale" />
-            </div>
-
-            <x-textarea wire:model="histoire_famille_supplementaire" label="Infos supplémentaires"
-                placeholder="Note ici..." maxlength="500" count :readonly="!$update_histoire_familiale" />
-
-            <div
-                class="mt-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                <label class="flex items-start gap-3">
-                    <x-toggle wire:model.live="update_histoire_familiale" wire:loading.attr="disabled" />
-                    <div class="flex justify-between w-full">
-                        <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Coché pour modifier les données
-                        </p>
-                        <flux:icon.loading wire:loading wire:target="update_histoire_familiale" />
-                    </div>
-                </label>
-            </div>
-
-            @if ($update_histoire_familiale)
-                <x-slot:footer>
-                    <div class="flex justify-end">
-                        <flux:button variant="primary" icon="save" wire:click="updateHistoireFamiliale"
-                            color="indigo">
-                            Enregistrer les modifications
-                        </flux:button>
-                    </div>
-                </x-slot:footer>
-            @endif
-        </x-card>
-
-        <x-card header="Histoire personnelle" minimize="mount"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            @if ($this->isIncompleteHistoirePersonnelle())
+            @if (filled($histoire_famille_supplementaire))
                 <div
-                    class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                    Données personnelles incomplètes : compléter les informations de grossesse et allaitement.
+                    class="mt-5 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Compléments</p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                        {{ $histoire_famille_supplementaire }}</p>
                 </div>
             @endif
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <x-input label="Age gestationnel (sem/mois)" wire:model="age_gestationnel"
-                    placeholder="Entrez l'âge gestationnel" :readonly="!$update_histoire_personnelle" />
-                <x-select.styled :readonly="!$update_histoire_personnelle" label="Allaitement maternel" wire:model="allaitement_maternel"
-                    placeholder="Choisir..." required :options="[['label' => 'OUI', 'value' => 1], ['label' => 'NON', 'value' => 0]]" />
-                <x-select.styled :readonly="!$update_histoire_personnelle" label="Médicaments traditionnels" wire:model="med_traditionnel"
-                    placeholder="Choisir..." required :options="[['label' => 'OUI', 'value' => 1], ['label' => 'NON', 'value' => 0]]" />
-                <x-select.styled :readonly="!$update_histoire_personnelle" label="Moringa Oleifera" wire:model="moringa_oleifera"
-                    placeholder="Choisir..." required :options="[['label' => 'OUI', 'value' => 1], ['label' => 'NON', 'value' => 0]]" />
+        </x-patient.fiche-section>
+
+        <x-patient.fiche-section title="Histoire personnelle" icon="heart" accent="sky"
+            section="histoire_personnelle" :incomplete="$this->isIncompleteHistoirePersonnelle()"
+            incomplete-message="Données de grossesse et de petite enfance incomplètes">
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <x-patient.fiche-field label="Âge gestationnel" :value="filled($age_gestationnel) ? $age_gestationnel . ' sem/mois' : '—'" :missing="!filled($age_gestationnel)" />
+                <x-patient.fiche-field label="Allaitement maternel" :value="$this->displayBool($allaitement_maternel)" :missing="!filled($allaitement_maternel)" />
+                <x-patient.fiche-field label="Médicaments traditionnels" :value="$this->displayBool($med_traditionnel)" :missing="!filled($med_traditionnel)" />
+                <x-patient.fiche-field label="Moringa oleifera" :value="$this->displayBool($moringa_oleifera)" :missing="!filled($moringa_oleifera)" />
+                <x-patient.fiche-field label="Indications" :value="$this->display($indications)" />
+                <x-patient.fiche-field label="Durée de prise" :value="$this->display($duree_prise)" />
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 mb-6 gap-4">
-                <x-input label="Indications" wire:model="indications" placeholder="Indications médicales"
-                    :readonly="!$update_histoire_personnelle" />
-                <x-input label="Durée" wire:model="duree_prise" placeholder="Durée de la prise"
-                    :readonly="!$update_histoire_personnelle" />
-            </div>
-            <div class="flex mb-6">
-                <div class="flex-1">
-                    <x-tag prefix="@" label="Vaccins" wire:model="vaccins" :readonly="!$update_histoire_personnelle"
-                        hint="Appuyer sur la touche Entrée ou la virgule pour ajouter un vaccin" />
+            @if ($this->vaccinTags() !== [])
+                <div class="mt-5">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Vaccins</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach ($this->vaccinTags() as $tag)
+                            <span
+                                class="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-200">
+                                {{ $tag }}
+                            </span>
+                        @endforeach
+                    </div>
                 </div>
-            </div>
-            <x-textarea wire:model="histoire_perso_supplementaire" label="Infos supplémentaires"
-                placeholder="Note ici..." maxlength="500" count :readonly="!$update_histoire_personnelle" />
-
-            <div
-                class="mt-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                <label class="flex items-start gap-3">
-                    <x-toggle wire:model.live="update_histoire_personnelle" wire:loading.attr="disabled" />
-                    <div class="flex justify-between w-full">
-                        <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Coché pour modifier les données
-                        </p>
-                        <flux:icon.loading wire:loading wire:target="update_histoire_personnelle" />
-                    </div>
-                </label>
-            </div>
-
-            @if ($update_histoire_personnelle)
-                <x-slot:footer>
-                    <div class="flex justify-end">
-                        <flux:button variant="primary" icon="save" wire:click="updateHistoirePersonnelle"
-                            color="indigo">
-                            Enregistrer les modifications
-                        </flux:button>
-                    </div>
-                </x-slot:footer>
+            @else
+                <x-patient.fiche-field class="mt-5" label="Vaccins" value="—" :missing="true" />
             @endif
-        </x-card>
-
-        <x-card header="Histoire de la maladie (Premiers Signes)" minimize="mount"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            @if ($this->isIncompleteHistoireMaladie())
+            @if (filled($histoire_perso_supplementaire))
                 <div
-                    class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                    Informations de maladie incomplètes : compléter les premiers signes et transfusions.
+                    class="mt-5 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Compléments</p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                        {{ $histoire_perso_supplementaire }}</p>
                 </div>
             @endif
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <x-input label="Syndrome mains-pieds (âge)" wire:model="syndrome_mains_pieds"
-                    placeholder="Entrez l'âge" :readonly="!$update_histoire_maladie" />
-                <x-input label="Fievre / infection (âge)" wire:model="fievre" placeholder="Entrez l'âge"
-                    :readonly="!$update_histoire_maladie" />
-                <x-input label="Itère (âge)" wire:model="itere" placeholder="Entrez l'âge" :readonly="!$update_histoire_maladie" />
-                <x-input label="CVO" wire:model="cvo" placeholder="Entrez l'âge" :readonly="!$update_histoire_maladie" />
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <x-input label="Première transfusion (âge)" wire:model="transfusion" placeholder="Entrez l'âge"
-                    :readonly="!$update_histoire_maladie" />
-                <x-number label="Nbre total de transfusions (âge)" wire:model="nbr_transfusion"
-                    placeholder="Nombre total de transfusions" :readonly="!$update_histoire_maladie" />
-                <x-input label="Episodes d'épistaxis (âge)" wire:model="episodes_epistaxis"
-                    placeholder="Entrez l'âge" :readonly="!$update_histoire_maladie" />
-                <x-number label="Nbre de CVO/an" wire:model="nbr_cvo_an" placeholder="Nombre de CVO par an"
-                    :readonly="!$update_histoire_maladie" />
-            </div>
-            <x-textarea wire:model="premier_signes_supplementaires" label="Infos supplémentaires"
-                placeholder="Note ici..." maxlength="500" count :readonly="!$update_histoire_maladie" />
+        </x-patient.fiche-section>
+
+        <x-patient.fiche-section title="Histoire de la maladie" icon="presentation-chart-line" accent="rose"
+            section="histoire_maladie" :incomplete="$this->isIncompleteHistoireMaladie()"
+            :incomplete-message="'Complément progressif — ' . $this->premierSigneProgress()['answered'] . '/' . $this->premierSigneProgress()['total'] . ' références renseignées'"
+            class="xl:col-span-2">
             <div
-                class="mt-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                <label class="flex items-start gap-3">
-                    <x-toggle wire:model.live="update_histoire_maladie" wire:loading.attr="disabled" />
-                    <div class="flex justify-between w-full">
-                        <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Coché pour modifier les données
-                        </p>
-                        <flux:icon.loading wire:loading wire:target="update_histoire_maladie" />
-                    </div>
-                </label>
+                class="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-rose-100 bg-rose-50/60 px-4 py-3 dark:border-rose-500/20 dark:bg-rose-950/20">
+                <p class="text-xs font-medium text-rose-900 dark:text-rose-200">
+                    Répondez aux références au fil du temps. Seules les questions remplies sont enregistrées.
+                </p>
+                <span class="shrink-0 text-sm font-black text-rose-700 dark:text-rose-300">
+                    {{ $this->premierSigneProgress()['percent'] }}%
+                </span>
             </div>
-
-            @if ($update_histoire_maladie)
-                <x-slot:footer>
-                    <div class="flex justify-end">
-                        <flux:button variant="primary" icon="save" wire:click="updateHistoireMaladie"
-                            color="indigo">
-                            Enregistrer les modifications
-                        </flux:button>
-                    </div>
-                </x-slot:footer>
-            @endif
-        </x-card>
-
-        <x-card header="Allergies connues" minimize="mount"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            <x-slot:footer>
-                <div class="flex justify-end">
-                    <flux:button variant="primary" icon="save" wire:click="updateHistoireMaladie" color="indigo">
-                        Ajouter un allergie
-                    </flux:button>
-                </div>
-            </x-slot:footer>
-        </x-card>
-
-        <x-card header="Autres antecedents" minimize="mount"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            @if ($this->isIncompleteAutresAntecedents())
+            <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                @foreach ($this->premierSigneRows() as $row)
+                    <x-patient.premier-signe-display :definition="$row['definition']" :answer="$row['answer']"
+                        wire:key="premier-signe-{{ $row['definition']->key }}" />
+                @endforeach
+            </div>
+            @if (filled($premier_signes_supplementaires))
                 <div
-                    class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                    Aucun antécédent renseigné : ajouter une ou plusieurs informations.
+                    class="mt-5 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Compléments généraux
+                    </p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                        {{ $premier_signes_supplementaires }}</p>
                 </div>
             @endif
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_medicales" label="Antecedents medicale" placeholder="Note ici..."
-                    maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_chirurgicaux" label="Antecedents chirurgicaux"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_familiaux" label="Antecedents familiaux"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_obstetricaux" label="Antecedents obstetricaux"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_gynocola" label="Antecedents gynocola" placeholder="Note ici..."
-                    maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_neurologiques" label="Antecedents neurologiques"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_cardiovasculaires" label="Antecedents cardiovasculaires"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_digestifs" label="Antecedents digestifs"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_endocrinologiques" label="Antecedents endocrinologiques"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_hematologiques" label="Antecedents hematologiques"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
-            <div class="mb-4">
-                <x-textarea wire:model="antecedents_supplementaires" label="Antecedents supplementaires"
-                    placeholder="Note ici..." maxlength="500" count :readonly="!$update_autres_antecedents" />
-            </div>
+        </x-patient.fiche-section>
 
-            <div
-                class="mt-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                <label class="flex items-start gap-3">
-                    <x-toggle wire:model.live="update_autres_antecedents" wire:loading.attr="disabled" />
-                    <div class="flex justify-between w-full">
-                        <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Coché pour modifier les données
+        <x-patient.fiche-section title="Autres antécédents" icon="clipboard-document-list" accent="amber"
+            section="autres_antecedents" :incomplete="$this->isIncompleteAutresAntecedents()"
+            incomplete-message="Aucun antécédent clinique renseigné">
+            <div class="grid grid-cols-1 gap-3">
+                @foreach ($this->antecedentFields() as $field => $label)
+                    @php($value = $this->{$field})
+                    <div @class([
+                        'rounded-2xl border px-4 py-3',
+                        'border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/40' => filled($value),
+                        'border-amber-200/80 bg-amber-50/40 dark:border-amber-500/20 dark:bg-amber-950/10' => ! filled($value),
+                    ])>
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{{ $label }}
                         </p>
-                        <flux:icon.loading wire:loading wire:target="update_autres_antecedents" />
-                    </div>
-                </label>
-            </div>
-
-            @if ($update_autres_antecedents)
-                <x-slot:footer>
-                    <div class="flex justify-end">
-                        <flux:button variant="primary" icon="save" wire:click="updateAutresAntecedents"
-                            color="indigo">
-                            Enregistrer les modifications
-                        </flux:button>
-                    </div>
-                </x-slot:footer>
-            @endif
-        </x-card>
-
-        <x-card header="Localisation actuelle" minimize="mount"
-            class="rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            @if ($this->isIncompleteLocalisation())
-                <div
-                    class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                    Localisation incomplète : compléter adresse et éléments géographiques.
-                </div>
-            @endif
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <x-select.styled label="Province !" wire:model.live="province_id" :request="route('api.provinces')"
-                    select="label:name|value:id" searchable required :readonly="!$update_localisation" />
-                <x-select.styled label="Ville !" wire:model.live="ville_id" :request="['url' => route('api.villes'), 'params' => ['province' => $province_id]]"
-                    select="label:name|value:id" required :readonly="!$update_localisation" />
-                <x-select.styled label="Commune !" wire:model="commune_id" :request="['url' => route('api.communes'), 'params' => ['ville' => $ville_id]]"
-                    select="label:name|value:id" required :readonly="!$update_localisation" />
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <x-input wire:model="quartier" label="Quartier !" :readonly="!$update_localisation" />
-                <x-input wire:model="avenue" label="Avenue !" :readonly="!$update_localisation" />
-                <x-input wire:model="num_habitation" label="N° Habitation !" :readonly="!$update_localisation" />
-            </div>
-            <x-textarea wire:model="adresses_supplementaires" label="autres adresses supplémentaires"
-                placeholder="Note ici..." maxlength="500" count :readonly="!$update_localisation" />
-            <div
-                class="mt-6 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 dark:border-sky-500/20 dark:bg-sky-500/10">
-                <label class="flex items-start gap-3">
-                    <x-toggle wire:model.live="update_localisation" wire:loading.attr="disabled" />
-                    <div class="flex justify-between w-full">
-                        <p class="text-sm font-semibold text-sky-900 dark:text-sky-100">Coché pour modifier les données
+                        <p @class([
+                            'mt-1.5 text-sm leading-relaxed',
+                            'text-slate-700 dark:text-slate-200' => filled($value),
+                            'italic text-amber-700 dark:text-amber-300' => ! filled($value),
+                        ])>
+                            {{ filled($value) ? $value : 'Non renseigné' }}
                         </p>
-                        <flux:icon.loading wire:loading wire:target="update_localisation" />
                     </div>
-                </label>
+                @endforeach
             </div>
-
-            @if ($update_localisation)
-                <x-slot:footer>
-                    <div class="flex justify-end">
-                        <flux:button variant="primary" icon="save" wire:click="updateLocalisation"
-                            color="indigo">
-                            Enregistrer les modifications
-                        </flux:button>
-                    </div>
-                </x-slot:footer>
-            @endif
-        </x-card>
+        </x-patient.fiche-section>
     </div>
+
+    <section
+        class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+        <div
+            class="border-b border-slate-100 bg-linear-to-r from-rose-500/10 to-rose-500/0 px-5 py-4 dark:border-slate-800">
+            <div class="flex items-center gap-3">
+                <div
+                    class="flex size-10 items-center justify-center rounded-2xl border border-rose-200/70 bg-white/80 dark:border-rose-500/20 dark:bg-slate-900/80">
+                    <flux:icon.shield-exclamation class="size-5 text-rose-600 dark:text-rose-300" />
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-slate-900 dark:text-white">Allergies connues</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Informations de sécurité thérapeutique</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-5 sm:p-6">
+            @if ($patient->allergies->isNotEmpty())
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($patient->allergies as $allergy)
+                        <span
+                            class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-800 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-200">
+                            {{ ucfirst($allergy->type) }}{{ filled($allergy->autre) ? ' · ' . $allergy->autre : '' }}
+                        </span>
+                    @endforeach
+                </div>
+            @else
+                <p class="text-sm italic text-slate-500 dark:text-slate-400">Aucune allergie enregistrée pour ce
+                    patient.</p>
+            @endif
+        </div>
+    </section>
+
+    <x-modal id="fiche-medicale-edit-modal" :title="$this->sectionTitle()" size="6xl" center z-index="z-20" persistent
+        x-on:fiche-medicale-saved.window="$tsui.close.modal('fiche-medicale-edit-modal')">
+        <div class="space-y-5">
+            <div
+                class="rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-indigo-900 dark:border-indigo-500/20 dark:bg-indigo-950/30 dark:text-indigo-100">
+                <p class="font-semibold">{{ ucfirst($patient->nom) }} {{ ucfirst($patient->prenom) }}</p>
+                <p class="mt-1 text-xs">NIN {{ $patient->nin }} · Modification de la section
+                    {{ strtolower($this->sectionTitle()) }}</p>
+            </div>
+
+            <flux:icon.loading wire:loading wire:target="openSection" />
+
+            <div wire:loading.remove wire:target="openSection">
+                @if ($activeSection === 'demographiques')
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <x-input label="Nom *" wire:model="nom" />
+                        <x-input label="Post-nom" wire:model="postnom" />
+                        <x-input label="Prénom *" wire:model="prenom" />
+                        <x-select.styled label="État civil *" wire:model="etat_civil" :options="[
+                            ['label' => 'Célibataire', 'value' => 'Célibataire'],
+                            ['label' => 'Marié', 'value' => 'Marié'],
+                            ['label' => 'Divorsé', 'value' => 'Divorsé'],
+                            ['label' => 'Veu(f)ve', 'value' => 'Veu(f)ve'],
+                        ]" />
+                        <x-date wire:model="date_naissance" label="Date de naissance *" />
+                        <x-number wire:model="poids_naissance" label="Poids de naissance (kg)" step="0.1" />
+                        <x-select.styled label="Genre *" wire:model="genre" :options="[['label' => 'Homme', 'value' => 'M'], ['label' => 'Femme', 'value' => 'F']]" />
+                        <x-input label="N° identité santé" wire:model="ins" />
+                        <x-select.styled wire:model="type_famille" label="Type de famille *"
+                            :options="['Monogame', 'Polygame', 'Recomposée', 'Adaptative', 'Orphelinat']" />
+                        <x-select.styled wire:model="country_id" label="Pays de naissance *"
+                            :request="route('api.countries')" select="label:name|value:id" />
+                        <x-input wire:model="telephone" label="Téléphone" />
+                        <x-input wire:model="email" label="E-mail" />
+                    </div>
+                    <x-textarea class="mt-4" wire:model="note" label="Infos supplémentaires" rows="4"
+                        maxlength="500" count />
+                @endif
+
+                @if ($activeSection === 'histoire_familiale')
+                    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        <div class="space-y-4 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                            <flux:subheading>Père</flux:subheading>
+                            <x-input label="Nom du père" wire:model="nom_pere" />
+                            <x-input label="Profession" wire:model="profession_pere" />
+                            <x-select.styled label="Province d'origine" wire:model="province_pere"
+                                :request="route('api.provinces')" select="label:name|value:id" />
+                            <x-input label="Tribu" wire:model="tribut_pere" />
+                        </div>
+                        <div class="space-y-4 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                            <flux:subheading>Mère</flux:subheading>
+                            <x-input label="Nom de la mère" wire:model="nom_mere" />
+                            <x-input label="Profession" wire:model="profession_mere" />
+                            <x-select.styled label="Province d'origine" wire:model="province_mere"
+                                :request="route('api.provinces')" select="label:name|value:id" />
+                            <x-input label="Tribu" wire:model="tribut_mere" />
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5">
+                        <x-number label="Rang fratrie" wire:model="rang_fratrie" />
+                        <x-number label="Frères vivants" wire:model="nb_freres" />
+                        <x-number label="Sœurs vivantes" wire:model="nb_soeurs" />
+                        <x-number label="Frères décédés" wire:model="deces_freres" />
+                        <x-number label="Sœurs décédées" wire:model="deces_soeurs" />
+                    </div>
+                    <x-textarea class="mt-4" wire:model="histoire_famille_supplementaire" label="Compléments"
+                        rows="4" maxlength="500" count />
+                @endif
+
+                @if ($activeSection === 'histoire_personnelle')
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <x-input label="Âge gestationnel (sem/mois)" wire:model="age_gestationnel" />
+                        <x-select.styled label="Allaitement maternel" wire:model="allaitement_maternel"
+                            :options="[['label' => 'Oui', 'value' => 1], ['label' => 'Non', 'value' => 0]]" />
+                        <x-select.styled label="Médicaments traditionnels" wire:model="med_traditionnel"
+                            :options="[['label' => 'Oui', 'value' => 1], ['label' => 'Non', 'value' => 0]]" />
+                        <x-select.styled label="Moringa oleifera" wire:model="moringa_oleifera"
+                            :options="[['label' => 'Oui', 'value' => 1], ['label' => 'Non', 'value' => 0]]" />
+                        <x-input label="Indications" wire:model="indications" />
+                        <x-input label="Durée de prise" wire:model="duree_prise" />
+                    </div>
+                    <x-tag class="mt-4" prefix="@" label="Vaccins" wire:model="vaccins"
+                        hint="Appuyer sur Entrée ou la virgule pour ajouter un vaccin" />
+                    <x-textarea class="mt-4" wire:model="histoire_perso_supplementaire" label="Compléments"
+                        rows="4" maxlength="500" count />
+                @endif
+
+                @if ($activeSection === 'histoire_maladie')
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        Renseignez uniquement les références connues aujourd'hui. L'âge ou le nombre n'est pas
+                        obligatoire, même en cas de réponse Oui.
+                    </p>
+                    <div class="space-y-4">
+                        @foreach (app(\App\Services\Patient\PremierSigneService::class)->definitions() as $definition)
+                            <x-patient.premier-signe-editor :definition="$definition" :wire-key="$definition->key"
+                                :present="$premierSignesForm[$definition->key]['present'] ?? null"
+                                wire:key="premier-signe-editor-{{ $definition->key }}" />
+                        @endforeach
+                    </div>
+                    <x-textarea class="mt-4" wire:model="premier_signes_supplementaires"
+                        label="Compléments généraux" rows="4" maxlength="1000" count
+                        placeholder="Observations transversales sur les premiers signes..." />
+                @endif
+
+                @if ($activeSection === 'autres_antecedents')
+                    <div class="space-y-4">
+                        @foreach ($this->antecedentFields() as $field => $label)
+                            <x-textarea wire:model="{{ $field }}" :label="$label" rows="3"
+                                maxlength="500" count />
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($activeSection === 'localisation')
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <x-select.styled label="Province" wire:model.live="province_id" :request="route('api.provinces')"
+                            select="label:name|value:id" searchable />
+                        <x-select.styled label="Ville" wire:model.live="ville_id"
+                            :request="['url' => route('api.villes'), 'params' => ['province' => $province_id]]" select="label:name|value:id"
+                            searchable />
+                        <x-select.styled label="Commune" wire:model="commune_id"
+                            :request="['url' => route('api.communes'), 'params' => ['ville' => $ville_id]]" select="label:name|value:id"
+                            searchable />
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <x-input wire:model="quartier" label="Quartier" />
+                        <x-input wire:model="avenue" label="Avenue" />
+                        <x-input wire:model="num_habitation" label="N° habitation" />
+                    </div>
+                    <x-textarea class="mt-4" wire:model="adresses_supplementaires"
+                        label="Autres adresses supplémentaires" rows="4" maxlength="500" count />
+                @endif
+            </div>
+        </div>
+
+        <x-slot:footer>
+            <div class="flex w-full justify-end gap-3">
+                <flux:button variant="ghost" x-on:click="$tsui.close.modal('fiche-medicale-edit-modal')">
+                    Annuler
+                </flux:button>
+                @if ($activeSection === 'demographiques')
+                    <flux:button variant="primary" color="indigo" wire:click="updateDemographiques">Enregistrer
+                    </flux:button>
+                @elseif ($activeSection === 'histoire_familiale')
+                    <flux:button variant="primary" color="indigo" wire:click="updateHistoireFamiliale">Enregistrer
+                    </flux:button>
+                @elseif ($activeSection === 'histoire_personnelle')
+                    <flux:button variant="primary" color="indigo" wire:click="updateHistoirePersonnelle">Enregistrer
+                    </flux:button>
+                @elseif ($activeSection === 'histoire_maladie')
+                    <flux:button variant="primary" color="indigo" wire:click="updateHistoireMaladie">Enregistrer
+                    </flux:button>
+                @elseif ($activeSection === 'autres_antecedents')
+                    <flux:button variant="primary" color="indigo" wire:click="updateAutresAntecedents">Enregistrer
+                    </flux:button>
+                @elseif ($activeSection === 'localisation')
+                    <flux:button variant="primary" color="indigo" wire:click="updateLocalisation">Enregistrer
+                    </flux:button>
+                @endif
+            </div>
+        </x-slot:footer>
+    </x-modal>
 </div>

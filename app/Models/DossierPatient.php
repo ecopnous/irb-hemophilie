@@ -73,14 +73,6 @@ class DossierPatient extends Model
         'vaccins',
         'histoire_perso_supplementaire',
 
-        'syndrome_mains_pieds',
-        'fievre',
-        'itere',
-        'cvo',
-        'transfusion',
-        'nbr_transfusion',
-        'episodes_epistaxis',
-        'nbr_cvo_an',
         'premier_signes_supplementaires',
 
         'antecedents_medicales',
@@ -221,8 +213,13 @@ class DossierPatient extends Model
         return $this->belongsToMany(Tag::class);
     }
 
-    public function allergies()
+    public function allergies(): HasMany
     {
-        return $this->belongsToMany(Allergy::class);
+        return $this->hasMany(Allergy::class);
+    }
+
+    public function premierSignes(): HasMany
+    {
+        return $this->hasMany(DossierPatientPremierSigne::class);
     }
 }
