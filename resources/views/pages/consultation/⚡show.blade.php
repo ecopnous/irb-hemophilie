@@ -2,6 +2,7 @@
 
 use App\Models\Configs\Acte;
 use App\Models\Configs\Departement;
+use App\Models\Configs\GroupeExamen;
 use App\Models\Consultation;
 use App\Models\Imagerie;
 use App\Models\Laboratoire;
@@ -27,6 +28,7 @@ new #[Title('Fiche de consultation')] class extends Component {
     public array $laboratoireForm = [];
     public array $imagerieForm = [];
     public array $laboratoireActeIds = [];
+    public ?int $groupeExamenId = null;
     public array $imagerieActeIds = [];
     public ?int $selectedLaboratoireActeId = null;
     public ?int $pendingDeleteLaboratoireActeId = null;
@@ -183,6 +185,7 @@ new #[Title('Fiche de consultation')] class extends Component {
             'hopital_id' => current_hopital_id(),
         ];
         $this->laboratoireActeIds = $this->laboratoireActes()->pluck('id')->map(fn($id) => (string) $id)->all();
+        $this->groupeExamenId = null;
 
         $this->imagerieForm = [
             'renseignement' => (string) ($this->consultation->imagerie?->renseignement ?? ''),
@@ -223,6 +226,42 @@ new #[Title('Fiche de consultation')] class extends Component {
     public function updatedLaboratoireActeIds(): void
     {
         $this->laboratoireActeIds = collect($this->laboratoireActeIds)->merge($this->validatedLaboratoireActeIds())->unique()->values()->all();
+    }
+
+    public function updatedGroupeExamenId($value): void
+    {
+        if (! $value) {
+            return;
+        }
+
+        $groupe = GroupeExamen::query()
+            ->active()
+            ->with('actes:id')
+            ->find((int) $value);
+
+        if (! $groupe) {
+            return;
+        }
+
+        $this->laboratoireActeIds = collect($this->laboratoireActeIds)
+            ->merge($groupe->actes->pluck('id')->map(fn ($id) => (string) $id)->all())
+            ->merge($this->validatedLaboratoireActeIds())
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function selectedLaboratoireActesPreview(): Collection
+    {
+        if ($this->laboratoireActeIds === []) {
+            return collect();
+        }
+
+        return Acte::query()
+            ->with(['service', 'departement'])
+            ->whereIn('id', $this->laboratoireActeIds)
+            ->orderBy('name')
+            ->get();
     }
 
     public function openLaboratoireActeNoteModal(int $acteId): void
@@ -904,21 +943,6 @@ new #[Title('Fiche de consultation')] class extends Component {
     protected function laboratoireDepartement(): ?Departement
     {
         return Departement::query()->where('name', 'like', '%laboratoire%')->orWhere('ref', 'labo')->first();
-    }
-
-    public function availableLaboratoireActes()
-    {
-        $departementId = $this->laboratoireDepartement()?->id;
-
-        if (!$departementId) {
-            return collect();
-        }
-
-        return Acte::query()
-            ->with(['departement', 'service'])
-            ->where('departement_id', $departementId)
-            ->orderBy('name')
-            ->get();
     }
 
     protected function imagerieDepartement(): ?Departement
@@ -1931,7 +1955,7 @@ new #[Title('Fiche de consultation')] class extends Component {
                                     <p class="text-sm font-semibold text-slate-900 dark:text-white">Demander les
                                         examens de laboratoire</p>
                                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                        Selection identique a la logique d initialisation de la consultation.
+                                        Choisissez un groupe préconfiguré ou sélectionnez les examens individuellement.
                                     </p>
                                 </div>
                                 <span
@@ -1940,27 +1964,42 @@ new #[Title('Fiche de consultation')] class extends Component {
                                 </span>
                             </div>
 
-                            <div class="mt-4">
-                                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Examens de
-                                    laboratoire *</p>
+                            <div class="mt-4 space-y-4">
+                                <x-select.styled label="Groupe d'examens (sélection rapide)"
+                                    wire:model.live="groupeExamenId" placeholder="Choisir un groupe préconfiguré..."
+                                    :request="route('api.groupeExamens')" select="label:name|value:id" searchable
+                                    hint="Ajoute automatiquement les examens du groupe à la sélection ci-dessous." />
 
-                                <div class="mt-3 grid gap-3 md:grid-cols-2">
-                                    @forelse ($this->availableLaboratoireActes() as $acte)
-                                        @php($isValidated = $this->isLaboratoireActeIdValidated($acte->id))
-                                        <label wire:key="laboratoire-acte-{{ $acte->id }}"
-                                            @class([
-                                                'flex items-start gap-3 rounded-2xl border px-4 py-3 transition',
-                                                'cursor-default border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20' => $isValidated,
-                                                'cursor-pointer border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-sky-700 dark:hover:bg-sky-950/30' => !$isValidated,
-                                            ])>
-                                            <input type="checkbox" value="{{ $acte->id }}"
-                                                wire:model="laboratoireActeIds" @disabled($isValidated)
-                                                class="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-70" />
-                                            <div class="min-w-0 flex-1">
+                                <x-select.styled label="Examens de laboratoire *" wire:model.live="laboratoireActeIds"
+                                    placeholder="Rechercher et sélectionner des examens..."
+                                    :request="[
+                                        'url' => route('api.actes'),
+                                        'params' => ['departement' => $this->laboratoireDepartement()?->id],
+                                    ]" select="label:name|value:id" multiple searchable />
+
+                                @error('laboratoireActeIds')
+                                    <p class="text-sm font-medium text-rose-600">{{ $message }}</p>
+                                @enderror
+
+                                @if ($this->selectedLaboratoireActesPreview()->isNotEmpty())
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        @foreach ($this->selectedLaboratoireActesPreview() as $acte)
+                                            @php($isValidated = $this->isLaboratoireActeIdValidated($acte->id))
+                                            <div wire:key="laboratoire-acte-preview-{{ $acte->id }}"
+                                                @class([
+                                                    'rounded-2xl border px-4 py-3',
+                                                    'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20' => $isValidated,
+                                                    'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900' => ! $isValidated,
+                                                ])>
                                                 <div class="flex items-start justify-between gap-3">
-                                                    <p class="font-medium text-slate-900 dark:text-white">
-                                                        {{ $acte->name }}</p>
-                                                    <div class="flex shrink-0 items-center gap-2">
+                                                    <div class="min-w-0">
+                                                        <p class="font-medium text-slate-900 dark:text-white">
+                                                            {{ $acte->name }}</p>
+                                                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                                            {{ $acte->service?->name ?: ($acte->departement?->name ?: 'Laboratoire') }}
+                                                        </p>
+                                                    </div>
+                                                    <div class="flex shrink-0 flex-col items-end gap-1">
                                                         @if ($isValidated)
                                                             <span
                                                                 class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
@@ -1973,22 +2012,14 @@ new #[Title('Fiche de consultation')] class extends Component {
                                                         </span>
                                                     </div>
                                                 </div>
-                                                @if ($acte->service?->name)
-                                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                                        {{ $acte->service->name }}
-                                                    </p>
-                                                @endif
                                             </div>
-                                        </label>
-                                    @empty
-                                        <p class="text-sm text-slate-500 dark:text-slate-400 md:col-span-2">
-                                            Aucun examen de laboratoire disponible.
-                                        </p>
-                                    @endforelse
-                                </div>
-                                @error('laboratoireActeIds')
-                                    <p class="mt-2 text-sm font-medium text-rose-600">{{ $message }}</p>
-                                @enderror
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                                        Aucun examen sélectionné. Utilisez un groupe ou la liste déroulante.
+                                    </p>
+                                @endif
                             </div>
                         </div>
                     </div>

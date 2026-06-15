@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class DossierPatient extends Model
 {
@@ -157,12 +159,20 @@ class DossierPatient extends Model
 
     protected static function booted()
     {
-        static::creating(function ($patient) {
+        static::creating(function (self $patient) {
             if (empty($patient->nin)) {
-                $latest = self::latest()->first();
-                $number = $latest ? $latest->id + 1 : 1;
+                $lockKey = 'dossier-patient-nin:' . ($patient->hopital_id ?? 'global');
 
-                $patient->nin = 'NIN-' . date('y') . $patient->genre . '-' . str_pad((string) $number, 5, '0', STR_PAD_LEFT);
+                Cache::lock($lockKey, 10)->block(5, function () use ($patient) {
+                    $number = (int) DB::table('dossier_patients')->max('id') + 1;
+
+                    $patient->nin = sprintf(
+                        'NIN-%s%s-%05d',
+                        date('y'),
+                        $patient->genre,
+                        $number
+                    );
+                });
             }
 
             if (empty($patient->user_id)) {

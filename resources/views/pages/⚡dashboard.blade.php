@@ -11,7 +11,7 @@ new #[Title('Tableau de bord réception')] class extends Component {
     {
         $service = app(DashboardMetricsService::class);
 
-        return $service->aggregateStats($service->receptionQuery());
+        return $service->receptionStats();
     }
 
     #[Computed]

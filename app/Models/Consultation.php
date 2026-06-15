@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class Consultation extends Model
@@ -88,24 +90,35 @@ class Consultation extends Model
 
     protected static function booted()
     {
-        static::creating(function ($patient) {
-            $latest = self::latest()->first();
-            $number = $latest ? $latest->id + 1 : 1;
-            $l = str_starts_with((string) $patient->type, 'consultation') ? 'C' : 'D';
+        static::creating(function (self $consultation) {
+            $lockKey = 'consultation-create:' . ($consultation->hopital_id ?? 'global');
 
-            $patient->reference = 'R-' . date('y') . $l . "-" . str_pad($number, 5, '0', STR_PAD_LEFT) . "";
-            if (static::hasProjectPeriodColumn()) {
-                $patient->is_project_period ??= static::shouldUseProjectPeriod($patient);
-            } else {
-                unset($patient->is_project_period);
-            }
+            Cache::lock($lockKey, 10)->block(5, function () use ($consultation) {
+                if (blank($consultation->reference)) {
+                    $consultation->reference = static::generateReference($consultation);
+                }
 
-            $patient->mois ??= static::resolvePeriode($patient);
+                if (static::hasProjectPeriodColumn()) {
+                    $consultation->is_project_period ??= static::shouldUseProjectPeriod($consultation);
+                } else {
+                    unset($consultation->is_project_period);
+                }
+
+                $consultation->mois ??= static::resolvePeriode($consultation);
+            });
         });
 
         static::created(function () {
             static::$periodContext = [];
         });
+    }
+
+    protected static function generateReference(self $consultation): string
+    {
+        $letter = str_starts_with((string) $consultation->type, 'consultation') ? 'C' : 'D';
+        $number = (int) DB::table('consultations')->max('id') + 1;
+
+        return sprintf('R-%s%s-%05d', date('y'), $letter, $number);
     }
 
     public static function createWithPeriodContext(array $attributes, array $context = []): self
@@ -141,18 +154,17 @@ class Consultation extends Model
     {
         $prefix = static::projectPrefix($consultation);
 
-        $count = static::query()
+        $query = static::query()
             ->where('dossier_patient_id', $consultation->dossier_patient_id)
             ->where('projet_id', $consultation->projet_id)
-            ->when(static::hasProjectPeriodColumn(), fn($query) => $query->where('is_project_period', true))
-            ->count();
+            ->when(static::hasProjectPeriodColumn(), fn ($q) => $q->where('is_project_period', true));
 
-        return $prefix . ($count + 1);
+        return $prefix . (static::maxMoisSequence($query, $prefix) + 1);
     }
 
     protected static function nextSequenceForPrefix(self $consultation, string $prefix): string
     {
-        $count = static::query()
+        $query = static::query()
             ->where('dossier_patient_id', $consultation->dossier_patient_id)
             ->where('type', $consultation->type)
             ->when(static::hasProjectPeriodColumn(), function ($query) {
@@ -160,10 +172,43 @@ class Consultation extends Model
                     $inner->whereNull('is_project_period')
                         ->orWhere('is_project_period', false);
                 });
-            })
-            ->count();
+            });
 
-        return $prefix . ($count + 1);
+        return $prefix . (static::maxMoisSequence($query, $prefix) + 1);
+    }
+
+    protected static function maxMoisSequence(Builder $query, string $prefix): int
+    {
+        $prefixLength = mb_strlen($prefix);
+        $driver = DB::connection()->getDriverName();
+
+        if (in_array($driver, ['sqlite', 'mysql', 'pgsql'], true)) {
+            $max = (clone $query)
+                ->where('mois', 'like', $prefix . '%')
+                ->selectRaw(static::moisNumericMaxExpression($prefixLength) . ' as max_seq')
+                ->value('max_seq');
+
+            return (int) ($max ?? 0);
+        }
+
+        return (clone $query)
+            ->where('mois', 'like', $prefix . '%')
+            ->pluck('mois')
+            ->map(fn (?string $mois) => (int) mb_substr((string) $mois, $prefixLength))
+            ->max() ?? 0;
+    }
+
+    protected static function moisNumericMaxExpression(int $prefixLength): string
+    {
+        $start = $prefixLength + 1;
+        $driver = DB::connection()->getDriverName();
+
+        return match ($driver) {
+            'sqlite' => "MAX(CAST(SUBSTR(mois, {$start}) AS INTEGER))",
+            'mysql' => "MAX(CAST(SUBSTRING(mois, {$start}) AS UNSIGNED))",
+            'pgsql' => "MAX(CAST(SUBSTRING(mois FROM {$start}) AS INTEGER))",
+            default => 'MAX(0)',
+        };
     }
 
     protected static function hasProjectPeriodColumn(): bool

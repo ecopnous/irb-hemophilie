@@ -62,8 +62,8 @@ return [
   'sidebar' => [
     ['area' => 'dossiers', 'label' => 'Nouvelle fiche médical', 'icon' => 'clipboard-plus', 'route' => 'patient.create', 'group' => 'actions'],
     ['area' => 'reception', 'label' => 'Réception', 'icon' => 'airplay', 'route' => 'dashboard', 'group' => 'main'],
-    ['area' => 'papeterie', 'label' => 'Papeterie', 'icon' => 'clipboard-document-list', 'route' => 'reception.papeterie', 'group' => 'main'],
-    ['area' => 'services_base', 'label' => 'Service de base', 'icon' => 'sparkles', 'route' => 'reception.services', 'group' => 'main'],
+    // ['area' => 'papeterie', 'label' => 'Papeterie', 'icon' => 'clipboard-document-list', 'route' => 'reception.papeterie', 'group' => 'main'],
+    // ['area' => 'services_base', 'label' => 'Service de base', 'icon' => 'sparkles', 'route' => 'reception.services', 'group' => 'main'],
     ['area' => 'triage', 'label' => 'Triage', 'icon' => 'inbox', 'route' => 'consultation.triage', 'group' => 'main'],
     ['area' => 'consultation', 'label' => 'Consultations', 'icon' => 'stethoscope', 'route' => 'consultation.index', 'group' => 'main'],
     ['area' => 'comptabilite', 'label' => 'Comptabilité', 'icon' => 'banknotes', 'route' => 'facturation.index', 'group' => 'main'],

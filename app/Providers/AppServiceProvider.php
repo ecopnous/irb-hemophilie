@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Consultation;
+use App\Observers\ConsultationObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Date;
@@ -26,6 +28,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Consultation::observe(ConsultationObserver::class);
+
         $this->ensurePublicStorageLink();
         $this->configureDefaults();
         TallStackUi::customize()

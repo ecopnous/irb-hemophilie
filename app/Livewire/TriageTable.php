@@ -3,9 +3,9 @@
 namespace App\Livewire;
 
 use App\Models\Consultation;
+use App\Support\PowerGridCell;
 use App\Support\PowerGridFilterCache;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Str;
 use PowerComponents\LivewirePowerGrid\Column;
 use PowerComponents\LivewirePowerGrid\Components\SetUp\Exportable;
@@ -54,7 +54,6 @@ final class TriageTable extends PowerGridComponent
                 'dossierPatient:id,nom,postnom,prenom,genre,date_naissance',
                 'departement:id,name',
             ])
-            // ->whereNull('user_id')
             ->whereNot('type', 'depistage')
             ->toDay()
             ->whereHopitalId(current_hopital_id())
@@ -75,75 +74,27 @@ final class TriageTable extends PowerGridComponent
             ->add('patient_genre', fn (Consultation $consultation) => $consultation->dossierPatient?->genre)
             ->add('projet_id', fn (Consultation $consultation) => $consultation->projet_id)
             ->add('departement_id', fn (Consultation $consultation) => $consultation->departement_id)
-            ->add('reference', function (Consultation $consultation) {
-                return Blade::render('<div class="space-y-1">
-                        @if($consultation->is_visite_program)
-                            <p class="font-bold tracking-tight text-blue-600 dark:text-blue-300">
-                                Rendez-Vous
-                            </p>
-                        @else
-                            <p class="font-bold tracking-tight text-slate-900 dark:text-white">
-                                Visite Médicale
-                            </p>
-                        @endif
-                        <p class="text-slate-500 dark:text-slate-400">
-                            {{ $consultation->reference }}
-                        </p>
-                    </div>',
-                    ['consultation' => $consultation]
-                );
-            })
-            ->add('dossierPatient', function (Consultation $consultation) {
-                return Blade::render('<div class="space-y-1">
-                        <p class="font-bold uppercase tracking-tight text-slate-900 dark:text-white">
-                            <a href="{{ route(\'consultation.prelevement\', $consultation->id) }}" class="hover:text-blue-600" wire:navigate>{{ $consultation->dossierPatient?->full_name }}</a>
-                        </p>
-                        <p class="text-slate-500 dark:text-slate-400">
-                            {{ $consultation->dossierPatient?->genre }} ({{ $consultation->dossierPatient?->age }})
-                        </p>
-                    </div>',
-                    ['consultation' => $consultation]
-                );
-            })
-            ->add('departement', function (Consultation $consultation) {
-                return Blade::render('<div class="space-y-1">
-                        <p class="uppercase tracking-tight">
-                           {{ ucwords($consultation->departement?->name ?? \' - \') }}
-                        </p>
-                        @if($consultation->is_clore)
-                            <p class="text-xs font-medium text-green-600 dark:text-green-300">
-                                dossier classé
-                            </p>
-                        @else
-                            <p class="text-xs font-medium text-red-600 dark:text-red-300">
-                                dossier ouvert
-                            </p>
-                        @endif
-                    </div>',
-                    ['consultation' => $consultation]
-                );
-            })
+            ->add('reference', fn (Consultation $consultation) => PowerGridCell::render(
+                'components.powergrid.cells.consultation-reference',
+                ['consultation' => $consultation, 'showDepistage' => false]
+            ))
+            ->add('dossierPatient', fn (Consultation $consultation) => PowerGridCell::render(
+                'components.powergrid.cells.consultation-patient',
+                ['consultation' => $consultation, 'routeName' => 'consultation.prelevement']
+            ))
+            ->add('departement', fn (Consultation $consultation) => PowerGridCell::render(
+                'components.powergrid.cells.consultation-departement',
+                compact('consultation')
+            ))
             ->add('mois', fn (Consultation $consultation) => $consultation->mois ?? '-')
-            ->add('date', function (Consultation $consultation) {
-                return Blade::render('
-                <div>
-                    <p class="font-medium text-slate-900 dark:text-white">
-                        {{ optional($consultation->created_at)->format(\'d/m/Y\') }}
-                    </p>
-                    <p class="text-slate-500 dark:text-slate-400">
-                        {{ optional($consultation->created_at)->format(\'H:i:s\') }}
-                    </p>
-                </div>
-                ', ['consultation' => $consultation]);
-            })
-            ->add('action', function (Consultation $consultation) {
-                return Blade::render('
-                    <a href="{{ route(\'consultation.prelevement\', $consultation->id) }}" wire:navigate
-                        class="inline-flex items-center gap-2 px-3 py-2 text-xs font-bold text-amber-900 dark:text-amber-100 rounded-xl border border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/10">
-                        Prélever
-                    </a>
-                ', ['consultation' => $consultation]);
-            })
+            ->add('date', fn (Consultation $consultation) => PowerGridCell::render(
+                'components.powergrid.cells.datetime-stacked',
+                ['datetime' => $consultation->created_at]
+            ))
+            ->add('action', fn (Consultation $consultation) => PowerGridCell::render(
+                'components.powergrid.cells.triage-action',
+                compact('consultation')
+            ))
             ->add('reference_export', fn (Consultation $consultation) => Str::lower($consultation->reference))
             ->add('nom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->nom))
             ->add('post_nom_export', fn (Consultation $consultation) => Str::lower($consultation->dossierPatient?->postnom))

@@ -2,11 +2,13 @@
 
 use App\Models\Configs\Acte;
 use App\Models\Configs\Departement;
+use App\Models\Configs\GroupeExamen;
 use App\Models\Consultation;
 use App\Models\Imagerie;
 use App\Models\Laboratoire;
 use App\Models\prescription\Prescription;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -20,6 +22,7 @@ new #[Title('Fiche de consultation')] class extends Component {
     public array $laboratoireForm = [];
     public array $imagerieForm = [];
     public array $laboratoireActeIds = [];
+    public ?int $groupeExamenId = null;
     public array $imagerieActeIds = [];
     public string $prescriptionNote = '';
     public string $rendezVousValue = '';
@@ -67,6 +70,7 @@ new #[Title('Fiche de consultation')] class extends Component {
             'commentaire' => (string) ($this->consultation->laboratoire?->commentaire ?? ''),
         ];
         $this->laboratoireActeIds = $this->laboratoireActes()->pluck('id')->map(fn($id) => (string) $id)->all();
+        $this->groupeExamenId = null;
 
         $this->imagerieForm = [
             'renseignement' => (string) ($this->consultation->imagerie?->renseignement ?? ''),
@@ -81,6 +85,41 @@ new #[Title('Fiche de consultation')] class extends Component {
             $field = $fieldMap[$section];
             $this->textValue = (string) ($this->consultation->{$field} ?? '');
         }
+    }
+
+    public function updatedGroupeExamenId($value): void
+    {
+        if (! $value) {
+            return;
+        }
+
+        $groupe = GroupeExamen::query()
+            ->active()
+            ->with('actes:id')
+            ->find((int) $value);
+
+        if (! $groupe) {
+            return;
+        }
+
+        $this->laboratoireActeIds = collect($this->laboratoireActeIds)
+            ->merge($groupe->actes->pluck('id')->map(fn ($id) => (string) $id)->all())
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function selectedLaboratoireActesPreview(): Collection
+    {
+        if ($this->laboratoireActeIds === []) {
+            return collect();
+        }
+
+        return Acte::query()
+            ->with(['service', 'departement'])
+            ->whereIn('id', $this->laboratoireActeIds)
+            ->orderBy('name')
+            ->get();
     }
 
     public function saveEditor(): void
@@ -568,25 +607,31 @@ new #[Title('Fiche de consultation')] class extends Component {
                                 <p class="text-sm font-semibold text-slate-900 dark:text-white">Demander les examens de
                                     laboratoire</p>
                                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                    Selectionnez ici les examens a demander pour cette consultation.
+                                    Choisissez un groupe préconfiguré ou sélectionnez les examens individuellement.
                                 </p>
                             </div>
                             <span
                                 class="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">
-                                {{ $this->laboratoireActes()->count() }}
+                                {{ count($laboratoireActeIds) }}
                             </span>
                         </div>
 
-                        <div class="mt-4">
-                            <x-select.styled label="Examens de laboratoire *" wire:model="laboratoireActeIds"
+                        <div class="mt-4 space-y-4">
+                            <x-select.styled label="Groupe d'examens (sélection rapide)"
+                                wire:model.live="groupeExamenId" placeholder="Choisir un groupe préconfiguré..."
+                                :request="route('api.groupeExamens')" select="label:name|value:id" searchable
+                                hint="Ajoute automatiquement les examens du groupe à la sélection." />
+
+                            <x-select.styled label="Examens de laboratoire *" wire:model.live="laboratoireActeIds"
+                                placeholder="Rechercher et sélectionner des examens..."
                                 :request="[
                                     'url' => route('api.actes'),
                                     'params' => ['departement' => $this->laboratoireDepartement()?->id],
-                                ]" select="label:name|value:id" multiple />
+                                ]" select="label:name|value:id" multiple searchable />
                         </div>
 
                         <div class="mt-4 grid gap-3 md:grid-cols-2">
-                            @forelse ($this->laboratoireActes() as $acte)
+                            @forelse ($this->selectedLaboratoireActesPreview() as $acte)
                                 <div
                                     class="rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
                                     <p class="font-medium text-slate-900 dark:text-white">{{ $acte->name }}</p>

@@ -116,6 +116,44 @@ class DashboardMetricsService
     }
 
     /**
+     * @param  array<string, mixed>  $filters
+     * @return array{total:int, depistages:int, sans_medecin:int, consultations:int, programmees:int, aujourd_hui:int}
+     */
+    public function receptionStats(array $filters = [], ?int $hopitalId = null, bool $useCache = true): array
+    {
+        $hopitalId ??= current_hopital_id();
+        $cacheKey = $this->statsCacheKey($hopitalId, $filters);
+
+        $resolver = fn (): array => $this->aggregateStats($this->receptionQuery($filters, $hopitalId));
+
+        if (!$useCache) {
+            return $resolver();
+        }
+
+        return Cache::remember($cacheKey, now()->addMinute(), $resolver);
+    }
+
+    public function forgetHopitalCache(?int $hopitalId): void
+    {
+        if (!$hopitalId) {
+            return;
+        }
+
+        Cache::forget("dashboard.overview.{$hopitalId}");
+        Cache::forget($this->statsCacheKey($hopitalId, []));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function statsCacheKey(int $hopitalId, array $filters): string
+    {
+        ksort($filters);
+
+        return 'dashboard.stats.' . $hopitalId . '.' . md5(json_encode($filters));
+    }
+
+    /**
      * @return array{total:int, depistages:int, sans_medecin:int, consultations:int, programmees:int, aujourd_hui:int}
      */
     public function aggregateStats(Builder $baseQuery): array
