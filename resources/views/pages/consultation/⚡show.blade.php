@@ -1904,9 +1904,9 @@ new #[Title('Fiche de consultation')] class extends Component {
                 <p class="mt-1 text-xs">Reference consultation: {{ $consultation->reference }}</p>
             </div>
 
-            <flux:icon.loading wire:loading wire:target="currentSection" />
+            <flux:icon.loading wire:loading wire:target="openEditor" />
 
-            <div wire:loading.remove>
+            <div wire:loading.remove wire:target="openEditor">
                 @if (in_array($currentSection, array_keys($this->sectionFieldMap()), true))
                     <x-textarea wire:model="textValue" label="Contenu" rows="10" maxlength="5000" count />
                 @endif
