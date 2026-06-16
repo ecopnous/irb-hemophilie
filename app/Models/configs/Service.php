@@ -3,6 +3,7 @@
 namespace App\Models\Configs;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Session;
 
 class Service extends Model
@@ -16,5 +17,10 @@ class Service extends Model
     public function departement()
     {
         return $this->belongsTo(Departement::class);
+    }
+
+    public function actes(): HasMany
+    {
+        return $this->hasMany(Acte::class);
     }
 }

@@ -28,7 +28,7 @@ new #[Title('Pharmacies'), Layout('layouts::app.other.pharmacy')] class extends 
 };
 ?>
 
-<div class="space-y-5 p-6">
+<div class="mx-auto space-y-5 max-w-7xl">
     <h1 class="text-2xl font-black text-slate-900 dark:text-white">Gestion des pharmacies</h1>
 
     <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">

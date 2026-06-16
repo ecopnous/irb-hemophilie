@@ -197,86 +197,86 @@ new #[Title('Gestion des prescriptions'), Layout('layouts::app.other.pharmacy')]
         return $lines->isNotEmpty() && $lines->every(fn (array $line) => $line['ok']);
     }
 
-    public function createPrescription(): void
-    {
-        $stock = $this->currentStock;
+    // public function createPrescription(): void
+    // {
+    //     $stock = $this->currentStock;
 
-        $validated = $this->validate([
-            'pharmacie_id' => [
-                'required',
-                'integer',
-                Rule::exists('pharmacies', 'id')->where(fn ($q) => $q->where('hopital_id', current_hopital_id())),
-            ],
-            'consultation_id' => [
-                'required',
-                'integer',
-                Rule::exists('consultations', 'id')->where(fn ($q) => $q->where('hopital_id', current_hopital_id())),
-            ],
-            'medicament_id' => ['required', 'integer', 'exists:medicaments,id'],
-            'qty' => ['required', 'integer', 'gt:0'],
-        ]);
+    //     $validated = $this->validate([
+    //         'pharmacie_id' => [
+    //             'required',
+    //             'integer',
+    //             Rule::exists('pharmacies', 'id')->where(fn ($q) => $q->where('hopital_id', current_hopital_id())),
+    //         ],
+    //         'consultation_id' => [
+    //             'required',
+    //             'integer',
+    //             Rule::exists('consultations', 'id')->where(fn ($q) => $q->where('hopital_id', current_hopital_id())),
+    //         ],
+    //         'medicament_id' => ['required', 'integer', 'exists:medicaments,id'],
+    //         'qty' => ['required', 'integer', 'gt:0'],
+    //     ]);
 
-        $linked = DB::table('medicament_pharmacie')
-            ->where('pharmacie_id', $validated['pharmacie_id'])
-            ->where('medicament_id', $validated['medicament_id'])
-            ->exists();
+    //     $linked = DB::table('medicament_pharmacie')
+    //         ->where('pharmacie_id', $validated['pharmacie_id'])
+    //         ->where('medicament_id', $validated['medicament_id'])
+    //         ->exists();
 
-        if (! $linked) {
-            throw ValidationException::withMessages([
-                'medicament_id' => 'Ce medicament n\'est pas disponible dans la pharmacie selectionnee.',
-            ]);
-        }
+    //     if (! $linked) {
+    //         throw ValidationException::withMessages([
+    //             'medicament_id' => 'Ce medicament n\'est pas disponible dans la pharmacie selectionnee.',
+    //         ]);
+    //     }
 
-        if ($stock <= 0) {
-            throw ValidationException::withMessages([
-                'medicament_id' => 'Stock indisponible pour ce medicament.',
-            ]);
-        }
+    //     if ($stock <= 0) {
+    //         throw ValidationException::withMessages([
+    //             'medicament_id' => 'Stock indisponible pour ce medicament.',
+    //         ]);
+    //     }
 
-        if ($validated['qty'] > $stock) {
-            throw ValidationException::withMessages([
-                'qty' => 'La quantite ne peut pas depasser le stock actuel (' . $stock . ').',
-            ]);
-        }
+    //     if ($validated['qty'] > $stock) {
+    //         throw ValidationException::withMessages([
+    //             'qty' => 'La quantite ne peut pas depasser le stock actuel (' . $stock . ').',
+    //         ]);
+    //     }
 
-        DB::transaction(function () use ($validated) {
-            $consultation = Consultation::query()->with('dossierPatient')->findOrFail($validated['consultation_id']);
-            $prescription = $consultation->prescription ?: Prescription::query()->create([
-                'consultation_id' => $consultation->id,
-                'hopital_id' => $consultation->hopital_id,
-                'dossier_patient_id' => $consultation->dossier_patient_id,
-                'status' => 'draft',
-            ]);
+    //     DB::transaction(function () use ($validated) {
+    //         $consultation = Consultation::query()->with('dossierPatient')->findOrFail($validated['consultation_id']);
+    //         $prescription = $consultation->prescription ?: Prescription::query()->create([
+    //             'consultation_id' => $consultation->id,
+    //             'hopital_id' => $consultation->hopital_id,
+    //             'dossier_patient_id' => $consultation->dossier_patient_id,
+    //             'status' => 'draft',
+    //         ]);
 
-            $existing = $prescription->medicaments()->where('medicament_id', $validated['medicament_id'])->first();
+    //         $existing = $prescription->medicaments()->where('medicament_id', $validated['medicament_id'])->first();
 
-            if ($existing) {
-                $newTotal = (int) $existing->pivot->nbr + (int) $validated['qty'];
+    //         if ($existing) {
+    //             $newTotal = (int) $existing->pivot->nbr + (int) $validated['qty'];
 
-                if ($newTotal > $stock) {
-                    throw ValidationException::withMessages([
-                        'qty' => 'La quantite totale prescrite (' . $newTotal . ') depasserait le stock actuel (' . $stock . ').',
-                    ]);
-                }
+    //             if ($newTotal > $stock) {
+    //                 throw ValidationException::withMessages([
+    //                     'qty' => 'La quantite totale prescrite (' . $newTotal . ') depasserait le stock actuel (' . $stock . ').',
+    //                 ]);
+    //             }
 
-                $prescription->medicaments()->updateExistingPivot($validated['medicament_id'], [
-                    'nbr' => $newTotal,
-                ]);
-            } else {
-                $prescription->medicaments()->attach($validated['medicament_id'], [
-                    'qte_jour' => 1,
-                    'nbr' => (int) $validated['qty'],
-                    'qte_servie' => 0,
-                ]);
-            }
-        });
+    //             $prescription->medicaments()->updateExistingPivot($validated['medicament_id'], [
+    //                 'nbr' => $newTotal,
+    //             ]);
+    //         } else {
+    //             $prescription->medicaments()->attach($validated['medicament_id'], [
+    //                 'qte_jour' => 1,
+    //                 'nbr' => (int) $validated['qty'],
+    //                 'qte_servie' => 0,
+    //             ]);
+    //         }
+    //     });
 
-        $this->reset(['medicament_id', 'qty']);
-        unset($this->pharmacyMedicaments, $this->currentStock, $this->selectedPrescription, $this->serveLines);
+    //     $this->reset(['medicament_id', 'qty']);
+    //     unset($this->pharmacyMedicaments, $this->currentStock, $this->selectedPrescription, $this->serveLines);
 
-        $this->dispatch('pg:eventRefresh-pharmacyPrescriptionTable');
-        session()->flash('success', 'Ligne de prescription ajoutee avec succes.');
-    }
+    //     $this->dispatch('pg:eventRefresh-pharmacyPrescriptionTable');
+    //     session()->flash('success', 'Ligne de prescription ajoutee avec succes.');
+    // }
 
     public function serveSelected(PharmacyStockService $service): void
     {
@@ -335,7 +335,7 @@ new #[Title('Gestion des prescriptions'), Layout('layouts::app.other.pharmacy')]
 };
 ?>
 
-<div class="space-y-5 p-6">
+<div class="mx-auto space-y-5 max-w-7xl">
     <div>
         <x-breadcrumbs :items="[
             ['label' => 'Pharmacie', 'link' => 'pharmacie.dashboard', 'icon' => 'building-storefront'],
@@ -359,7 +359,7 @@ new #[Title('Gestion des prescriptions'), Layout('layouts::app.other.pharmacy')]
             <a href="{{ route('pharmacie.pharmacies') }}" wire:navigate class="font-bold underline">Configurer une pharmacie</a>
         </div>
     @else
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        {{-- <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h2 class="mb-1 font-bold text-slate-900 dark:text-white">Nouvelle ligne de prescription</h2>
             <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">Liee a une consultation active de l'hopital.</p>
 
@@ -432,7 +432,7 @@ new #[Title('Gestion des prescriptions'), Layout('layouts::app.other.pharmacy')]
             @error('medicament_id')
                 <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
             @enderror
-        </div>
+        </div> --}}
 
         <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h2 class="mb-1 font-bold text-slate-900 dark:text-white">Dispenser une prescription</h2>

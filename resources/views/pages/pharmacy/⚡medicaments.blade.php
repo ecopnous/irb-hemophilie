@@ -74,7 +74,7 @@ new #[Title('Medicaments'), Layout('layouts::app.other.pharmacy')] class extends
 };
 ?>
 
-<div class="space-y-5 p-6">
+<div class="mx-auto space-y-5  max-w-7xl">
     <div class="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
         Note: un stock avec quantite 0 sera automatiquement cree dans toutes les pharmacies de votre etablissement.
     </div>

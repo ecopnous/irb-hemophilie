@@ -25,15 +25,15 @@
         >
             <div x-show="!showRecoveryInput">
                 <x-auth-header
-                    :title="__('Authentication code')"
-                    :description="__('Enter the authentication code provided by your authenticator application.')"
+                    :title="__('Code d authentification')"
+                    :description="__('Saisissez le code genere par votre application d authentification.')"
                 />
             </div>
 
             <div x-show="showRecoveryInput">
                 <x-auth-header
-                    :title="__('Recovery code')"
-                    :description="__('Please confirm access to your account by entering one of your emergency recovery codes.')"
+                    :title="__('Code de recuperation')"
+                    :description="__('Utilisez un code de recuperation pour confirmer l acces a votre compte.')"
                 />
             </div>
 
@@ -47,7 +47,7 @@
                                 x-model="code"
                                 length="6"
                                 name="code"
-                                label="OTP Code"
+                                label="Code OTP"
                                 label:sr-only
                                 class="mx-auto"
                              />
@@ -78,15 +78,15 @@
                         type="submit"
                         class="w-full"
                     >
-                        {{ __('Continue') }}
+                        {{ __('Continuer') }}
                     </flux:button>
                 </div>
 
                 <div class="mt-5 space-x-0.5 text-sm leading-5 text-center">
-                    <span class="opacity-50">{{ __('or you can') }}</span>
+                    <span class="opacity-50">{{ __('ou') }}</span>
                     <div class="inline font-medium underline cursor-pointer opacity-80">
-                        <span x-show="!showRecoveryInput" @click="toggleInput()">{{ __('login using a recovery code') }}</span>
-                        <span x-show="showRecoveryInput" @click="toggleInput()">{{ __('login using an authentication code') }}</span>
+                        <span x-show="!showRecoveryInput" @click="toggleInput()">{{ __('se connecter avec un code de recuperation') }}</span>
+                        <span x-show="showRecoveryInput" @click="toggleInput()">{{ __('se connecter avec un code d authentification') }}</span>
                     </div>
                 </div>
             </form>

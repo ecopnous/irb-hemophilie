@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\AllergyType;
+use App\Models\Allergy;
 use App\Models\DossierPatient;
 use App\Models\Localisations\Country;
 use App\Models\Localisations\Province;
@@ -44,6 +46,16 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public $antecedents_medicales, $antecedents_chirurgicaux, $antecedents_familiaux, $antecedents_obstetricaux, $antecedents_gynocola, $antecedents_neurologiques, $antecedents_cardiovasculaires, $antecedents_digestifs, $antecedents_endocrinologiques, $antecedents_hematologiques, $antecedents_supplementaires;
     public $tag_ids = [];
 
+    public ?int $allergyEditId = null;
+    public ?int $pendingDeleteAllergyId = null;
+    public string $allergyType = 'medicament';
+    public ?string $allergyAutre = null;
+    public string $allergySymptome = '';
+    public string $allergySolution = '';
+    public ?string $allergyDescription = null;
+    public string $allergyDateDebut = '';
+    public ?string $allergyDateFin = null;
+
     public function mount($id): void
     {
         $this->loadPatient($id);
@@ -53,7 +65,13 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     protected function loadPatient(int $id): void
     {
         $this->patient = DossierPatient::query()
-            ->with(['province', 'ville', 'commune', 'allergies', 'premierSignes.definition'])
+            ->with([
+                'province',
+                'ville',
+                'commune',
+                'allergies' => fn ($query) => $query->latest('date_debut'),
+                'premierSignes.definition',
+            ])
             ->findOrFail($id);
     }
 
@@ -290,6 +308,117 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->activeSection = null;
         $this->dispatch('fiche-medicale-saved');
         Flux::toast(variant: 'success', heading: 'Mise à jour réussie', text: $message);
+    }
+
+    public function allergyTypeOptions(): array
+    {
+        return AllergyType::options();
+    }
+
+    public function allergyRequiresAutre(): bool
+    {
+        return $this->allergyType === AllergyType::Autre->value;
+    }
+
+    public function openAllergyModal(?int $id = null): void
+    {
+        $this->resetValidation();
+        $this->resetAllergyForm();
+
+        if ($id) {
+            $allergy = $this->patient->allergies()->findOrFail($id);
+            $this->allergyEditId = $allergy->id;
+            $this->allergyType = $allergy->type?->value ?? AllergyType::Medicament->value;
+            $this->allergyAutre = $allergy->autre;
+            $this->allergySymptome = (string) $allergy->symptome;
+            $this->allergySolution = (string) $allergy->solution;
+            $this->allergyDescription = $allergy->description;
+            $this->allergyDateDebut = $allergy->date_debut?->format('Y-m-d') ?? '';
+            $this->allergyDateFin = $allergy->date_fin?->format('Y-m-d');
+        } else {
+            $this->allergyDateDebut = now()->format('Y-m-d');
+        }
+    }
+
+    protected function resetAllergyForm(): void
+    {
+        $this->allergyEditId = null;
+        $this->allergyType = AllergyType::Medicament->value;
+        $this->allergyAutre = null;
+        $this->allergySymptome = '';
+        $this->allergySolution = '';
+        $this->allergyDescription = null;
+        $this->allergyDateDebut = now()->format('Y-m-d');
+        $this->allergyDateFin = null;
+    }
+
+    protected function allergyValidationRules(): array
+    {
+        return [
+            'allergyType' => ['required', 'in:medicament,alimentaire,environnementale,animaux,autre'],
+            'allergyAutre' => ['required_if:allergyType,autre', 'nullable', 'string', 'max:255'],
+            'allergySymptome' => ['required', 'string', 'max:255'],
+            'allergySolution' => ['required', 'string', 'max:255'],
+            'allergyDescription' => ['nullable', 'string', 'max:500'],
+            'allergyDateDebut' => ['required', 'date'],
+            'allergyDateFin' => ['nullable', 'date', 'after_or_equal:allergyDateDebut'],
+        ];
+    }
+
+    public function saveAllergy(): void
+    {
+        try {
+            $validated = $this->validate($this->allergyValidationRules());
+
+            $payload = [
+                'type' => $validated['allergyType'],
+                'autre' => $validated['allergyType'] === 'autre' ? ($validated['allergyAutre'] ?: null) : null,
+                'symptome' => $validated['allergySymptome'],
+                'solution' => $validated['allergySolution'],
+                'description' => $validated['allergyDescription'] ?: null,
+                'date_debut' => $validated['allergyDateDebut'],
+                'date_fin' => $validated['allergyDateFin'] ?: null,
+            ];
+
+            if ($this->allergyEditId) {
+                $this->patient->allergies()->whereKey($this->allergyEditId)->update($payload);
+                $message = 'Allergie mise à jour.';
+            } else {
+                $this->patient->allergies()->create($payload);
+                $message = 'Allergie ajoutée au dossier.';
+            }
+
+            $this->loadPatient($this->patient->id);
+            $this->resetAllergyForm();
+            $this->dispatch('allergy-saved');
+            Flux::toast(variant: 'success', heading: 'Allergie enregistrée', text: $message);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Flux::toast(variant: 'error', heading: 'Enregistrement échoué', text: 'Vérifiez les champs obligatoires.');
+            throw $e;
+        }
+    }
+
+    public function confirmDeleteAllergy(int $id): void
+    {
+        if (! $this->patient->allergies()->whereKey($id)->exists()) {
+            return;
+        }
+
+        $this->pendingDeleteAllergyId = $id;
+        $this->dispatch('allergy-delete-open');
+    }
+
+    public function deleteAllergy(): void
+    {
+        if (! $this->pendingDeleteAllergyId) {
+            return;
+        }
+
+        $this->patient->allergies()->whereKey($this->pendingDeleteAllergyId)->delete();
+        $this->pendingDeleteAllergyId = null;
+        $this->loadPatient($this->patient->id);
+        $this->dispatch('allergy-deleted');
+        Flux::toast(variant: 'success', heading: 'Allergie supprimée', text: 'L\'allergie a été retirée du dossier.');
     }
 
     protected function isFilled(mixed $value): bool
@@ -678,8 +807,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
         <x-patient.fiche-section title="Autres antécédents" icon="clipboard-document-list" accent="amber"
             section="autres_antecedents" :incomplete="$this->isIncompleteAutresAntecedents()"
-            incomplete-message="Aucun antécédent clinique renseigné">
-            <div class="grid grid-cols-1 gap-3">
+            incomplete-message="Aucun antécédent clinique renseigné" class="xl:col-span-2">
+            <div class="grid grid-cols-2 gap-3">
                 @foreach ($this->antecedentFields() as $field => $label)
                     @php($value = $this->{$field})
                     <div @class([
@@ -706,30 +835,43 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
         <div
             class="border-b border-slate-100 bg-linear-to-r from-rose-500/10 to-rose-500/0 px-5 py-4 dark:border-slate-800">
-            <div class="flex items-center gap-3">
-                <div
-                    class="flex size-10 items-center justify-center rounded-2xl border border-rose-200/70 bg-white/80 dark:border-rose-500/20 dark:bg-slate-900/80">
-                    <flux:icon.shield-exclamation class="size-5 text-rose-600 dark:text-rose-300" />
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="flex size-10 items-center justify-center rounded-2xl border border-rose-200/70 bg-white/80 dark:border-rose-500/20 dark:bg-slate-900/80">
+                        <flux:icon.shield-exclamation class="size-5 text-rose-600 dark:text-rose-300" />
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-slate-900 dark:text-white">Allergies connues</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Informations de sécurité thérapeutique
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h3 class="text-base font-black text-slate-900 dark:text-white">Allergies connues</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Informations de sécurité thérapeutique</p>
-                </div>
+                <flux:button size="sm" variant="primary" color="rose" icon="plus"
+                    wire:click="openAllergyModal" x-on:click="$tsui.open.modal('allergy-modal')">
+                    Ajouter une allergie
+                </flux:button>
             </div>
         </div>
         <div class="p-5 sm:p-6">
             @if ($patient->allergies->isNotEmpty())
-                <div class="flex flex-wrap gap-2">
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     @foreach ($patient->allergies as $allergy)
-                        <span
-                            class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-800 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-200">
-                            {{ ucfirst($allergy->type) }}{{ filled($allergy->autre) ? ' · ' . $allergy->autre : '' }}
-                        </span>
+                        <x-patient.allergy-card :allergy="$allergy" wire:key="allergy-{{ $allergy->id }}" />
                     @endforeach
                 </div>
             @else
-                <p class="text-sm italic text-slate-500 dark:text-slate-400">Aucune allergie enregistrée pour ce
-                    patient.</p>
+                <div
+                    class="rounded-2xl border border-dashed border-rose-200 bg-rose-50/30 px-5 py-8 text-center dark:border-rose-500/20 dark:bg-rose-950/10">
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Aucune allergie enregistrée</p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Ajoutez les allergies connues pour sécuriser les prescriptions et actes médicaux.
+                    </p>
+                    <flux:button class="mt-4" size="sm" variant="primary" color="rose" icon="plus"
+                        wire:click="openAllergyModal" x-on:click="$tsui.open.modal('allergy-modal')">
+                        Déclarer une allergie
+                    </flux:button>
+                </div>
             @endif
         </div>
     </section>
@@ -893,6 +1035,68 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                     <flux:button variant="primary" color="indigo" wire:click="updateLocalisation">Enregistrer
                     </flux:button>
                 @endif
+            </div>
+        </x-slot:footer>
+    </x-modal>
+
+    <x-modal id="allergy-modal" :title="$allergyEditId ? 'Modifier l\'allergie' : 'Ajouter une allergie'" size="4xl" center persistent
+        x-on:allergy-saved.window="$tsui.close.modal('allergy-modal')">
+        <div class="space-y-5">
+            <div
+                class="rounded-2xl border border-rose-100 bg-rose-50/80 p-4 text-sm text-rose-900 dark:border-rose-500/20 dark:bg-rose-950/30 dark:text-rose-100">
+                <p class="font-semibold">{{ ucfirst($patient->nom) }} {{ ucfirst($patient->prenom) }}</p>
+                <p class="mt-1 text-xs">Documentez le type, les symptômes et la conduite à tenir en cas d'exposition.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <x-select.styled label="Type d'allergie *" wire:model.live="allergyType" :options="$this->allergyTypeOptions()" />
+                @if ($this->allergyRequiresAutre())
+                    <x-input label="Précision (autre) *" wire:model="allergyAutre"
+                        placeholder="Ex. pénicilline, arachide..." />
+                @endif
+                <x-date wire:model="allergyDateDebut" label="Date de début *" />
+                <x-date wire:model="allergyDateFin" label="Date de fin (si résolue)" />
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <x-input label="Symptômes *" wire:model="allergySymptome"
+                    placeholder="Ex. urticaire, dyspnée, choc..." />
+                <x-input label="Conduite à tenir *" wire:model="allergySolution"
+                    placeholder="Ex. éviter le produit, antihistaminique..." />
+            </div>
+
+            <x-textarea wire:model="allergyDescription" label="Description complémentaire" rows="3" maxlength="500"
+                count placeholder="Contexte, gravité, traitements antérieurs..." />
+        </div>
+
+        <x-slot:footer>
+            <div class="flex w-full justify-end gap-3">
+                <flux:button variant="ghost" x-on:click="$tsui.close.modal('allergy-modal')">
+                    Annuler
+                </flux:button>
+                <flux:button variant="primary" color="rose" wire:click="saveAllergy">
+                    {{ $allergyEditId ? 'Enregistrer' : 'Ajouter' }}
+                </flux:button>
+            </div>
+        </x-slot:footer>
+    </x-modal>
+
+    <x-modal id="allergy-delete-modal" title="Supprimer l'allergie" size="2xl" center persistent
+        x-on:allergy-delete-open.window="$tsui.open.modal('allergy-delete-modal')"
+        x-on:allergy-deleted.window="$tsui.close.modal('allergy-delete-modal')">
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+            Confirmez la suppression de cette allergie du dossier patient. Cette action est irréversible.
+        </p>
+
+        <x-slot:footer>
+            <div class="flex w-full justify-end gap-3">
+                <flux:button variant="ghost" x-on:click="$tsui.close.modal('allergy-delete-modal')">
+                    Annuler
+                </flux:button>
+                <flux:button variant="danger" wire:click="deleteAllergy">
+                    Supprimer
+                </flux:button>
             </div>
         </x-slot:footer>
     </x-modal>

@@ -69,7 +69,7 @@ new #[Title('Tableau de bord pharmacie'), Layout('layouts::app.other.pharmacy')]
 };
 ?>
 
-<div class="space-y-6 p-6">
+<div class="mx-auto space-y-6 max-w-7xl">
     <div class="grid gap-6 xl:grid-cols-[1.5fr,1fr]">
         <div class="space-y-5">
             <x-breadcrumbs :items="[

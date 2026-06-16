@@ -21,6 +21,14 @@ class Acte extends Model
         'departement_id',
         'service_id',
         'updated_by',
+        'unite',
+        'min',
+        'max',
+        'homme_min',
+        'homme_max',
+        'femme_min',
+        'femme_max',
+        'is_delete',
     ];
 
     public function departement(): BelongsTo

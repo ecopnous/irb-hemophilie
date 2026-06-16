@@ -79,16 +79,35 @@
         <flux:navbar class="me-4">
         </flux:navbar>
 
-        <flux:dropdown position="top" align="start">
-            <flux:profile avatar="https://fluxui.dev/img/demo/user.png" />
+        <flux:dropdown position="top" align="end">
+            <flux:profile
+                :name="auth()->user()->name"
+                :initials="auth()->user()->initials()"
+            />
 
             <flux:menu>
-                <flux:menu.radio.group>
-                    <flux:menu.radio checked>Olivia Martin</flux:menu.radio>
-                    <flux:menu.radio>Truly Delta</flux:menu.radio>
-                </flux:menu.radio.group>
+                <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
+                    <flux:avatar :name="auth()->user()->name" :initials="auth()->user()->initials()" />
+                    <div class="grid flex-1 text-start text-sm leading-tight">
+                        <flux:heading class="truncate">{{ auth()->user()->name }}</flux:heading>
+                        <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
+                    </div>
+                </div>
                 <flux:menu.separator />
-                <flux:menu.item icon="arrow-right-start-on-rectangle">Logout</flux:menu.item>
+                <flux:menu.item :href="route('profil')" icon="user-circle" wire:navigate>
+                    Mon profil
+                </flux:menu.item>
+                <flux:menu.item :href="route('settings.index')" icon="cog-6-tooth" wire:navigate>
+                    Parametres
+                </flux:menu.item>
+                <flux:menu.separator />
+                <form method="POST" action="{{ route('logout') }}" class="w-full">
+                    @csrf
+                    <flux:menu.item as="button" type="submit" icon="arrow-right-start-on-rectangle"
+                        class="w-full cursor-pointer">
+                        Déconnexion
+                    </flux:menu.item>
+                </form>
             </flux:menu>
         </flux:dropdown>
     </flux:header>

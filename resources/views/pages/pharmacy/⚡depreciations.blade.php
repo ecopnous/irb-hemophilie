@@ -151,7 +151,7 @@ new #[Title('Medicaments deprecies'), Layout('layouts::app.other.pharmacy')] cla
 };
 ?>
 
-<div class="space-y-5">
+<div class="mx-auto space-y-5  max-w-7xl">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-black text-slate-900 dark:text-white">Depreciations de stock</h1>
         <span class="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-300">

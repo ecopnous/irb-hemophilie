@@ -5,27 +5,22 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Profile settings')] class extends Component {
+new #[Title('Informations du compte'), Layout('layouts::app')] class extends Component {
     use ProfileValidationRules;
 
     public string $name = '';
     public string $email = '';
 
-    /**
-     * Mount the component.
-     */
     public function mount(): void
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
     }
 
-    /**
-     * Update the profile information for the currently authenticated user.
-     */
     public function updateProfileInformation(): void
     {
         $user = Auth::user();
@@ -40,12 +35,9 @@ new #[Title('Profile settings')] class extends Component {
 
         $user->save();
 
-        Flux::toast(variant: 'success', text: __('Profile updated.'));
+        Flux::toast(variant: 'success', heading: 'Profil mis a jour', text: 'Vos informations ont ete enregistrees.');
     }
 
-    /**
-     * Send an email verification notification to the current user.
-     */
     public function resendVerificationNotification(): void
     {
         $user = Auth::user();
@@ -58,7 +50,7 @@ new #[Title('Profile settings')] class extends Component {
 
         $user->sendEmailVerificationNotification();
 
-        Flux::toast(text: __('A new verification link has been sent to your email address.'));
+        Flux::toast(text: 'Un nouveau lien de verification a ete envoye.');
     }
 
     #[Computed]
@@ -75,41 +67,57 @@ new #[Title('Profile settings')] class extends Component {
     }
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
+<div class="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
+    <x-breadcrumbs :items="[
+        ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
+        ['label' => 'Parametres', 'link' => 'settings.index', 'icon' => 'cog-6-tooth'],
+        ['label' => 'Informations du compte', 'icon' => 'identification'],
+    ]" />
 
-    <flux:heading class="sr-only">{{ __('Profile settings') }}</flux:heading>
-
-    <x-pages::settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
-        <form wire:submit="updateProfileInformation" class="my-6 w-full space-y-6">
-            <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
-
-            <div>
-                <flux:input wire:model="email" :label="__('Email')" type="email" required autocomplete="email" />
-
-                @if ($this->hasUnverifiedEmail)
-                    <div>
-                        <flux:text class="mt-4">
-                            {{ __('Your email address is unverified.') }}
-
-                            <flux:link class="text-sm cursor-pointer" wire:click.prevent="resendVerificationNotification">
-                                {{ __('Click here to re-send the verification email.') }}
-                            </flux:link>
-                        </flux:text>
-
-                    </div>
-                @endif
+    <section
+        class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+        <div class="border-b border-slate-100 bg-slate-50/80 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/80">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 class="text-xl font-black text-slate-900 dark:text-white">Informations du compte</h1>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Mettez a jour votre nom et votre adresse email.
+                    </p>
+                </div>
+                <flux:button href="{{ route('settings.index') }}" variant="ghost" size="sm" icon="arrow-left" wire:navigate>
+                    Retour
+                </flux:button>
             </div>
+        </div>
 
-            <div class="flex items-center gap-4">
-                <flux:button variant="primary" type="submit" data-test="update-profile-button">
-                    {{ __('Save') }}
+        <form wire:submit="updateProfileInformation" class="space-y-5 p-6 sm:p-8">
+            <flux:input wire:model="name" label="Nom" type="text" required autofocus autocomplete="name" />
+            <flux:input wire:model="email" label="Adresse email" type="email" required autocomplete="email" />
+
+            @if ($this->hasUnverifiedEmail)
+                <div class="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                    Votre adresse email n'est pas verifiee.
+                    <flux:link class="ms-1 cursor-pointer font-semibold" wire:click.prevent="resendVerificationNotification">
+                        Renvoyer le lien de verification
+                    </flux:link>
+                </div>
+            @endif
+
+            <div class="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
+                <flux:button href="{{ route('settings.index') }}" variant="ghost" wire:navigate>Annuler</flux:button>
+                <flux:button variant="primary" type="submit" color="indigo" icon="check" data-test="update-profile-button">
+                    Enregistrer
                 </flux:button>
             </div>
         </form>
+    </section>
 
-        @if ($this->showDeleteUser)
-            <livewire:pages::settings.delete-user-form />
-        @endif
-    </x-pages::settings.layout>
-</section>
+    @if ($this->showDeleteUser)
+        <section
+            class="overflow-hidden rounded-[1.75rem] border border-red-200 bg-red-50/30 shadow-sm dark:border-red-500/20 dark:bg-red-500/5">
+            <div class="p-6 sm:p-8">
+                <livewire:pages::settings.delete-user-form />
+            </div>
+        </section>
+    @endif
+</div>

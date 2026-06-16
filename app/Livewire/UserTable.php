@@ -143,6 +143,25 @@ final class UserTable extends PowerGridComponent
                 ->bodyAttribute('text-xs')
                 ->sortable()
                 ->searchable(),
+
+            Column::action('Action'),
+        ];
+    }
+
+    #[\Livewire\Attributes\On('show-user')]
+    public function showUser(int $rowId): void
+    {
+        $this->redirectRoute('settings.user.show', ['id' => $rowId], navigate: true);
+    }
+
+    public function actions(User $row): array
+    {
+        return [
+            Button::add('show')
+                ->slot('Voir détail')
+                ->id()
+                ->class('inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:border-indigo-500/40')
+                ->dispatch('show-user', ['rowId' => $row->id]),
         ];
     }
 }

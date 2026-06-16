@@ -3,17 +3,28 @@
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen bg-white antialiased dark:bg-linear-to-b dark:from-neutral-950 dark:to-neutral-900">
-        <div class="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-            <div class="flex w-full max-w-sm flex-col gap-2">
-                <a href="{{ route('home') }}" class="flex flex-col items-center gap-2 font-medium" wire:navigate>
-                    <span class="flex h-9 w-9 mb-1 items-center justify-center rounded-md">
-                        <x-app-logo-icon class="size-9 fill-current text-black dark:text-white" />
+    <body class="min-h-screen bg-slate-50 antialiased dark:bg-neutral-950">
+        <div class="relative flex min-h-svh items-center justify-center overflow-hidden px-6 py-10 md:px-10">
+            <div class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.18),_transparent_55%)]"></div>
+
+            <div class="w-full max-w-md">
+                <a href="{{ route('home') }}" class="mb-6 flex flex-col items-center gap-2 font-medium" wire:navigate>
+                    <span class="mb-1 flex h-11 w-11 items-center justify-center rounded-xl bg-sky-600 text-white shadow-lg shadow-sky-500/30">
+                        <x-app-logo-icon class="size-7 fill-current" />
                     </span>
                     <span class="sr-only">{{ config('app.name', 'Laravel') }}</span>
                 </a>
-                <div class="flex flex-col gap-6">
-                    {{ $slot }}
+
+                <div class="rounded-2xl border border-slate-200/80 bg-white/95 p-7 shadow-xl shadow-slate-300/20 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90 dark:shadow-black/30 md:p-8">
+                    <div class="mb-5">
+                        <p class="text-center text-xs font-semibold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400">
+                            {{ config('app.name', 'Laravel') }}
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col gap-6">
+                        {{ $slot }}
+                    </div>
                 </div>
             </div>
         </div>

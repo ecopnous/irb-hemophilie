@@ -16,6 +16,7 @@ Route::view('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
     Route::livewire('/dashboard', 'pages::dashboard')->name('dashboard');
+    Route::livewire('/profil', 'pages::profil')->name('profil');
 
     Route::prefix('reception')->name('reception.')->group(function () {
         Route::livewire('/papeterie', 'pages::reception.papeterie')->name('papeterie');

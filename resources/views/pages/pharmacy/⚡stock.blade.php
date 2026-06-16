@@ -50,7 +50,7 @@ new #[Title('Stock medicaments'), Layout('layouts::app.other.pharmacy')] class e
 };
 ?>
 
-<div class="space-y-5 p-6">
+<div class="mx-auto space-y-5 max-w-7xl">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-black text-slate-900 dark:text-white">Stock medicaments</h1>
     </div>

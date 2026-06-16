@@ -19,8 +19,11 @@
         </div>
         <flux:menu.separator />
         <flux:menu.radio.group>
-            <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
-                {{ __('Settings') }}
+            <flux:menu.item :href="route('profil')" icon="user-circle" wire:navigate>
+                {{ __('Mon profil') }}
+            </flux:menu.item>
+            <flux:menu.item :href="route('settings.index')" icon="cog" wire:navigate>
+                {{ __('Parametres') }}
             </flux:menu.item>
             <form method="POST" action="{{ route('logout') }}" class="w-full">
                 @csrf

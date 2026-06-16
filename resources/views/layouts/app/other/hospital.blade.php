@@ -1,4 +1,4 @@
-<x-layouts::app.sidebar :title="$title ?? null">
+<x-layouts::app.sidebar :title="$title ?? null" :back="true">
     <x-slot:navigation>
         <flux:sidebar.nav>
             <flux:sidebar.item icon="airplay" href="{{ route('hospital.index') }}" wire:navigate>Réception

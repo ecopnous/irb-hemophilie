@@ -83,7 +83,7 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
 @php($charts = $this->charts)
 @php($apexCdn = \ArielMejiaDev\LarapexCharts\LarapexChart::cdn().'/dist/apexcharts.min.js')
 
-<div class="min-h-screen bg-[#eef2f7] dark:bg-slate-950" wire:key="evolution-{{ $patient->id }}-{{ $period }}-{{ $departement_id }}-{{ $consultation_type }}-{{ $user_id }}-{{ $compare_mode }}-{{ $date_start }}-{{ $date_end }}">
+<div class="min-h-screen wire:key="evolution-{{ $patient->id }}-{{ $period }}-{{ $departement_id }}-{{ $consultation_type }}-{{ $user_id }}-{{ $compare_mode }}-{{ $date_start }}-{{ $date_end }}">
     <x-patient.patient-profil-header
         :nav="[
             ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
@@ -98,7 +98,7 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
     </x-patient.patient-profil-header>
 
     {{-- Filtres --}}
-    <div class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+    <div class="sticky rounded-4xl border top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
         <div class="mx-auto max-w-[1600px] px-4 py-4 lg:px-8">
             <div class="grid gap-3 lg:grid-cols-12 lg:items-end">
                 <div class="lg:col-span-5">

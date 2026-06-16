@@ -4,6 +4,7 @@ namespace App\Models\Configs;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Departement extends Model
 {
@@ -11,7 +12,13 @@ class Departement extends Model
         'name',
         'description',
         'color',
+        'user_id',
     ];
+
+    public function chef(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 
     public function services()
     {

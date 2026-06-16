@@ -25,7 +25,7 @@ new #[Title('Mouvements de stock'), Layout('layouts::app.other.pharmacy')] class
 };
 ?>
 
-<div class="space-y-5 p-6">
+<div class="mx-auto space-y-5 max-w-7xl">
     <h1 class="text-2xl font-black text-slate-900 dark:text-white">Mouvements de stock</h1>
 
     <div class="flex flex-wrap gap-3">
