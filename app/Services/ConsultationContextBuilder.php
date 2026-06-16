@@ -3,11 +3,16 @@
 namespace App\Services;
 
 use App\Models\Consultation;
+use App\Services\Consultation\ClinicalExamService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class ConsultationContextBuilder
 {
+    public function __construct(
+        private readonly ClinicalExamService $clinicalExamService,
+    ) {}
+
     /**
      * @return array{context: string, has_data: bool}
      */
@@ -23,6 +28,8 @@ class ConsultationContextBuilder
             'laboratoire',
             'imagerie',
             'prescription.medicaments',
+            'clinicalExam',
+            'clinicalExamValues.definition',
             'actes' => fn ($query) => $query->withPivot('resultat', 'note_clinique', 'commentaire', 'valide'),
         ]);
 
@@ -85,7 +92,16 @@ class ConsultationContextBuilder
         $this->appendIfFilled($lines, 'Allergies', $consultation->allergies);
         $this->appendIfFilled($lines, 'Histoire de la maladie', $consultation->histoire_maladie);
         $this->appendIfFilled($lines, 'Complément anamnèse', $consultation->complement_anamnese);
-        $this->appendIfFilled($lines, 'Examen clinique / physique', $consultation->examen_clinique ?: ($consultation->examen_physique ?? null));
+
+        $clinicalExamSummary = $this->clinicalExamService->toTextSummary($consultation);
+        if (filled($clinicalExamSummary)) {
+            $lines[] = '';
+            $lines[] = '=== EXAMEN CLINIQUE STRUCTURÉ ===';
+            $lines[] = $clinicalExamSummary;
+        } else {
+            $this->appendIfFilled($lines, 'Examen clinique (texte libre)', $consultation->examen_clinique);
+        }
+
         $this->appendIfFilled($lines, 'Diagnostic de présomption (déjà saisi)', $consultation->diagnostic_presomption);
         $this->appendIfFilled($lines, 'Diagnostic de certitude (déjà saisi)', $consultation->diagnostic_certitude);
         $this->appendIfFilled($lines, 'Plan de traitement / conduite (déjà saisi)', $consultation->plan_traitement_conduite);
@@ -167,14 +183,14 @@ class ConsultationContextBuilder
 
     private function hasClinicalData(Consultation $consultation): bool
     {
-        return $consultation->symptomeItems->isNotEmpty()
+        return $this->clinicalExamService->hasData($consultation)
+            || $consultation->symptomeItems->isNotEmpty()
             || filled($consultation->symptomes)
             || filled($consultation->antecedents)
             || filled($consultation->allergies)
             || filled($consultation->histoire_maladie)
             || filled($consultation->complement_anamnese)
             || filled($consultation->examen_clinique)
-            || filled($consultation->examen_physique ?? null)
             || filled($consultation->poids)
             || filled($consultation->temperature)
             || filled($consultation->systolite)

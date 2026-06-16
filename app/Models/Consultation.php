@@ -357,6 +357,16 @@ class Consultation extends Model
         return $this->hasOne(Prescription::class);
     }
 
+    public function clinicalExam(): HasOne
+    {
+        return $this->hasOne(ConsultationClinicalExam::class);
+    }
+
+    public function clinicalExamValues(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ConsultationClinicalExamValue::class);
+    }
+
     public function stockMovements(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(StockMovement::class);

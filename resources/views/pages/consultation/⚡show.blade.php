@@ -9,6 +9,7 @@ use App\Models\Laboratoire;
 use App\Models\liaison\Image;
 use App\Models\prescription\Medicament;
 use App\Models\prescription\Prescription;
+use App\Services\Consultation\ClinicalExamService;
 use App\Services\ConsultationContextBuilder;
 use App\Services\GeminiService;
 use Illuminate\Support\Arr;
@@ -54,6 +55,15 @@ new #[Title('Fiche de consultation')] class extends Component {
     public ?string $aiAnalysis = null;
     public ?string $aiError = null;
 
+    /** @var array<string, array<string, mixed>> */
+    public array $clinicalExamForm = [];
+
+    /** @var array{examined_at: string, synthesis: string} */
+    public array $clinicalExamMeta = [
+        'examined_at' => '',
+        'synthesis' => '',
+    ];
+
     public function mount(int $id): void
     {
         $this->loadConsultation($id);
@@ -62,7 +72,7 @@ new #[Title('Fiche de consultation')] class extends Component {
     public function loadConsultation(int $id): void
     {
         $this->consultation = Consultation::query()
-            ->with(['dossierPatient', 'departement', 'service', 'user', 'assurance', 'projet', 'laboratoire.images', 'imagerie', 'prescription.medicaments', 'actes.departement', 'actes.service', 'consultationSource', 'symptomeItems'])
+            ->with(['dossierPatient', 'departement', 'service', 'user', 'assurance', 'projet', 'laboratoire.images', 'imagerie', 'prescription.medicaments', 'actes.departement', 'actes.service', 'consultationSource', 'symptomeItems', 'clinicalExam.filledBy', 'clinicalExamValues.definition'])
             ->findOrFail($id);
 
         $this->syncIssueForm();
@@ -539,7 +549,6 @@ new #[Title('Fiche de consultation')] class extends Component {
     {
         return [
             'complement_anamnese' => 'complement_anamnese',
-            'examen_physique' => 'examen_physique',
             'diagnostic_presomption' => 'diagnostic_presomption',
             'plan_traitement_conduite' => 'plan_traitement_conduite',
         ];
@@ -547,7 +556,63 @@ new #[Title('Fiche de consultation')] class extends Component {
 
     public function narrativeSections(): array
     {
-        return [['key' => 'symptomes', 'title' => 'Symptômes', 'preview' => null], ['key' => 'complement_anamnese', 'title' => 'Complement d\'anamnese', 'preview' => $this->consultation->complement_anamnese], ['key' => 'examen_physique', 'title' => 'Examen physique', 'preview' => $this->consultation->examen_physique], ['key' => 'diagnostic_presomption', 'title' => 'Diagnostic de presomption', 'preview' => $this->consultation->diagnostic_presomption], ['key' => 'diagnostic_certitude', 'title' => 'Diagnostic de certitude', 'preview' => $this->consultation->diagnostic_certitude], ['key' => 'plan_traitement_conduite', 'title' => 'Plan de traitement et conduite a tenir', 'preview' => $this->consultation->plan_traitement_conduite]];
+        return [['key' => 'symptomes', 'title' => 'Symptômes', 'preview' => null], ['key' => 'complement_anamnese', 'title' => 'Complement d\'anamnese', 'preview' => $this->consultation->complement_anamnese], ['key' => 'diagnostic_presomption', 'title' => 'Diagnostic de presomption', 'preview' => $this->consultation->diagnostic_presomption], ['key' => 'diagnostic_certitude', 'title' => 'Diagnostic de certitude', 'preview' => $this->consultation->diagnostic_certitude], ['key' => 'plan_traitement_conduite', 'title' => 'Plan de traitement et conduite a tenir', 'preview' => $this->consultation->plan_traitement_conduite]];
+    }
+
+    public function openClinicalExamEditor(): void
+    {
+        $this->resetValidation();
+        $form = app(ClinicalExamService::class)->toFormArray($this->consultation);
+        $this->clinicalExamMeta = [
+            'examined_at' => $form['examined_at'] ?? now()->format('Y-m-d'),
+            'synthesis' => $form['synthesis'],
+        ];
+        $this->clinicalExamForm = $form['fields'];
+        $this->dispatch('clinical-exam-modal-open');
+    }
+
+    public function saveClinicalExam(): void
+    {
+        $this->validate(app(ClinicalExamService::class)->validationRules());
+
+        app(ClinicalExamService::class)->sync($this->consultation, [
+            'examined_at' => $this->clinicalExamMeta['examined_at'] ?: null,
+            'synthesis' => $this->clinicalExamMeta['synthesis'] ?: null,
+            'fields' => $this->clinicalExamForm,
+        ]);
+
+        $this->loadConsultation($this->consultation->id);
+        $this->dispatch('clinical-exam-saved');
+    }
+
+    /**
+     * @return array{answered: int, total: int, percent: int}
+     */
+    #[Computed]
+    public function clinicalExamProgress(): array
+    {
+        return app(ClinicalExamService::class)->progress($this->consultation);
+    }
+
+    public function hasClinicalExamData(): bool
+    {
+        return app(ClinicalExamService::class)->hasData($this->consultation);
+    }
+
+    /**
+     * @return Collection<int, array{section: array{key: string, label: string}, rows: Collection<int, array{definition: \App\Models\ClinicalExamFieldDefinition, answer: \App\Models\ConsultationClinicalExamValue|null}>}>
+     */
+    public function clinicalExamPresentation(): Collection
+    {
+        return app(ClinicalExamService::class)->presentationSections($this->consultation);
+    }
+
+    /**
+     * @return array<int, array{key: string, label: string, fields: Collection<int, \App\Models\ClinicalExamFieldDefinition>}>
+     */
+    public function clinicalExamSections(): array
+    {
+        return app(ClinicalExamService::class)->sections();
     }
 
     public function hasSymptomes(): bool
@@ -1165,6 +1230,76 @@ new #[Title('Fiche de consultation')] class extends Component {
                                     </span>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    {{-- Examen clinique structuré --}}
+                    <section
+                        class="rounded-md border border-teal-200 bg-white shadow-sm dark:border-teal-500/25 dark:bg-slate-950/70">
+                        <div
+                            class="border-b border-teal-100 bg-linear-to-r from-teal-50 to-white px-5 py-4 dark:border-teal-500/20 dark:from-teal-950/40 dark:to-slate-950/70">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-teal-600 dark:text-teal-300">
+                                        Examen clinique
+                                    </p>
+                                    <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">
+                                        Constats physiques & synthèse
+                                    </h3>
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                        Complétion : {{ $this->clinicalExamProgress['answered'] }}/{{ $this->clinicalExamProgress['total'] }} ({{ $this->clinicalExamProgress['percent'] }}%)
+                                    </p>
+                                </div>
+                                <x-button wire:click="openClinicalExamEditor"
+                                    x-on:click="$tsui.open.modal('clinical-exam-modal')" icon="pencil-square">
+                                    {{ $this->hasClinicalExamData() ? 'Modifier' : 'Renseigner' }}
+                                </x-button>
+                            </div>
+                        </div>
+
+                        <div class="px-5 py-5">
+                            @if ($this->consultation->clinicalExam?->examined_at)
+                                <p class="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    Date examen : {{ $this->consultation->clinicalExam->examined_at->format('d/m/Y') }}
+                                    @if ($this->consultation->clinicalExam->filledBy)
+                                        · Rempli par {{ $this->consultation->clinicalExam->filledBy->name }}
+                                    @endif
+                                </p>
+                            @endif
+
+                            @if ($this->clinicalExamPresentation()->isEmpty() && blank($this->consultation->clinicalExam?->synthesis))
+                                <p class="text-sm italic text-slate-500 dark:text-slate-400">
+                                    Aucun élément d'examen clinique enregistré. Renseignez les sections selon la fiche standard.
+                                </p>
+                            @else
+                                <div class="grid gap-4 lg:grid-cols-2">
+                                    @foreach ($this->clinicalExamPresentation() as $section)
+                                        <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                                            <h4 class="mb-3 text-xs font-black uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300">
+                                                {{ $section['section']['label'] }}
+                                            </h4>
+                                            @foreach ($section['rows'] as $row)
+                                                <x-consultation.clinical-exam-field-display
+                                                    :definition="$row['definition']"
+                                                    :answer="$row['answer']"
+                                                    wire:key="clinical-display-{{ $row['definition']->key }}"
+                                                />
+                                            @endforeach
+                                        </div>
+                                    @endforeach
+                                </div>
+
+                                @if (filled($this->consultation->clinicalExam?->synthesis))
+                                    <div class="mt-4 rounded-2xl border border-teal-200 bg-teal-50/50 p-4 dark:border-teal-500/20 dark:bg-teal-500/10">
+                                        <p class="text-[11px] font-black uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300">
+                                            Synthèse médicale
+                                        </p>
+                                        <p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                                            {{ $this->consultation->clinicalExam->synthesis }}
+                                        </p>
+                                    </div>
+                                @endif
+                            @endif
                         </div>
                     </section>
 
@@ -2354,6 +2489,62 @@ new #[Title('Fiche de consultation')] class extends Component {
                 </flux:button>
                 <flux:button variant="danger" wire:click="deleteLaboratoireActe">
                     Supprimer l'examen
+                </flux:button>
+            </div>
+        </x-slot:footer>
+    </x-modal>
+
+    <x-modal id="clinical-exam-modal" title="Examen clinique" size="4xl" center persistent
+        x-on:clinical-exam-modal-open.window="$tsui.open.modal('clinical-exam-modal')"
+        x-on:clinical-exam-saved.window="$tsui.close.modal('clinical-exam-modal')">
+        <div class="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Date de l'examen</label>
+                    <input type="date" wire:model="clinicalExamMeta.examined_at"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                    @error('clinicalExamMeta.examined_at') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div class="flex items-end">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Renseignez les sections selon la fiche standard. Les champs vides ne seront pas enregistrés.
+                    </p>
+                </div>
+            </div>
+
+            @foreach ($this->clinicalExamSections() as $section)
+                <div wire:key="clinical-section-{{ $section['key'] }}" class="space-y-3">
+                    <h4 class="border-b border-slate-200 pb-2 text-xs font-black uppercase tracking-[0.2em] text-teal-700 dark:border-slate-700 dark:text-teal-300">
+                        {{ $section['label'] }}
+                    </h4>
+                    <div class="grid gap-3 md:grid-cols-2">
+                        @foreach ($section['fields'] as $definition)
+                            <x-consultation.clinical-exam-field-editor
+                                :definition="$definition"
+                                :wire-key="$definition->key"
+                                :present="$clinicalExamForm[$definition->key]['present'] ?? null"
+                                wire:key="clinical-editor-{{ $definition->key }}"
+                            />
+                        @endforeach
+                    </div>
+                </div>
+            @endforeach
+
+            <div>
+                <x-textarea wire:model="clinicalExamMeta.synthesis" label="Commentaire médical et synthèse"
+                    rows="6" maxlength="2000" count
+                    placeholder="Synthèse globale de l'examen clinique (250 mots max recommandé)..." />
+            </div>
+        </div>
+
+        <x-slot:footer>
+            <div class="flex w-full justify-end gap-3">
+                <flux:button variant="ghost" x-on:click="$tsui.close.modal('clinical-exam-modal')">
+                    Annuler
+                </flux:button>
+                <flux:button variant="primary" wire:click="saveClinicalExam" wire:loading.attr="disabled" wire:target="saveClinicalExam">
+                    <span wire:loading.remove wire:target="saveClinicalExam">Enregistrer l'examen</span>
+                    <span wire:loading wire:target="saveClinicalExam">Enregistrement…</span>
                 </flux:button>
             </div>
         </x-slot:footer>

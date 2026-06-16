@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             HopitalSeeder::class,
             DepartementSeeder::class,
             TagSeeder::class,
+            ClinicalExamFieldDefinitionSeeder::class,
         ]);
 
         User::factory()->create([
