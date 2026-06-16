@@ -67,14 +67,15 @@ new #[Title('Informations du compte'), Layout('layouts::app')] class extends Com
     }
 }; ?>
 
-<div class="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
+<div class="mx-auto max-w-7xl space-y-6">
     <x-breadcrumbs :items="[
         ['label' => 'Accueil', 'link' => 'dashboard', 'icon' => 'home'],
         ['label' => 'Parametres', 'link' => 'settings.index', 'icon' => 'cog-6-tooth'],
         ['label' => 'Informations du compte', 'icon' => 'identification'],
     ]" />
 
-    <section
+    <div class="grid grid-cols-2 gap-4">
+        <section
         class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
         <div class="border-b border-slate-100 bg-slate-50/80 px-6 py-5 dark:border-slate-800 dark:bg-slate-900/80">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -120,4 +121,5 @@ new #[Title('Informations du compte'), Layout('layouts::app')] class extends Com
             </div>
         </section>
     @endif
+    </div>
 </div>

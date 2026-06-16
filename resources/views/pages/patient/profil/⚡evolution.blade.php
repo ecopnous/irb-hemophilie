@@ -1,8 +1,11 @@
 <?php
 
 use App\Models\DossierPatient;
+use App\Services\GeminiService;
 use App\Services\PatientEvolutionChartBuilder;
+use App\Services\PatientEvolutionContextBuilder;
 use App\Services\PatientEvolutionMetricsService;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -19,6 +22,11 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
     public string $user_id = '';
     public string $compare_mode = 'first_last';
 
+    public bool $showAiModal = false;
+    public bool $aiAnalyzing = false;
+    public ?string $aiAnalysis = null;
+    public ?string $aiError = null;
+
     public function mount(int $id): void
     {
         $this->patient = DossierPatient::query()->findOrFail($id);
@@ -28,6 +36,54 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
     {
         app(PatientEvolutionMetricsService::class)->forgetCache($this->patient->id, $this->filterPayload());
         unset($this->metrics, $this->charts, $this->chartOptions);
+    }
+
+    public function runDeepAnalysis(): void
+    {
+        $this->aiError = null;
+        $this->aiAnalysis = null;
+        $this->aiAnalyzing = true;
+        $this->showAiModal = true;
+
+        if ($this->metrics['kpis']['total_consultations'] === 0) {
+            $this->aiError = 'Aucune consultation disponible pour l\'analyse avec les filtres actuels.';
+            $this->aiAnalyzing = false;
+
+            return;
+        }
+
+        $context = app(PatientEvolutionContextBuilder::class)->build(
+            $this->patient->id,
+            $this->filterPayload(),
+        );
+
+        $result = app(GeminiService::class)->analyzePatientEvolution($context);
+
+        if (blank($result)) {
+            $this->aiError = 'L\'analyse n\'a pas pu être générée. Vérifiez la configuration de l\'API Gemini ou réessayez.';
+        } else {
+            $this->aiAnalysis = trim($result);
+        }
+
+        $this->aiAnalyzing = false;
+    }
+
+    public function closeAiModal(): void
+    {
+        $this->showAiModal = false;
+    }
+
+    #[Computed]
+    public function aiAnalysisHtml(): string
+    {
+        if (blank($this->aiAnalysis)) {
+            return '';
+        }
+
+        return Str::markdown($this->aiAnalysis, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
     }
 
     /**
@@ -316,8 +372,126 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
                 </div>
             </section>
         @endif
+
+        {{-- Analyse IA --}}
+        <section class="rounded-3xl border border-violet-200 bg-linear-to-br from-violet-50 via-white to-indigo-50 p-6 dark:border-violet-500/30 dark:from-violet-500/10 dark:via-slate-900 dark:to-indigo-500/10">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Analyse approfondie</h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        Synthèse clinique générée par IA à partir de l'historique filtré (aide à la décision, ne remplace pas le jugement médical).
+                    </p>
+                </div>
+                @if ($k['total_consultations'] === 0)
+                    <flux:button variant="primary" icon="sparkles" disabled class="shrink-0 opacity-50">
+                        Analyse approfondie
+                    </flux:button>
+                @else
+                    <flux:button
+                        variant="primary"
+                        icon="sparkles"
+                        wire:click="runDeepAnalysis"
+                        wire:loading.attr="disabled"
+                        wire:target="runDeepAnalysis"
+                        class="shrink-0"
+                    >
+                        <span wire:loading.remove wire:target="runDeepAnalysis">Analyse approfondie</span>
+                        <span wire:loading wire:target="runDeepAnalysis">Analyse en cours…</span>
+                    </flux:button>
+                @endif
+            </div>
+        </section>
     </div>
+
+    <flux:modal wire:model.self="showAiModal" class="max-w-3xl">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">Analyse approfondie</flux:heading>
+                <flux:subheading>
+                    {{ $m['patient']['full_name'] }} · {{ $m['periodLabel'] }}
+                </flux:subheading>
+            </div>
+
+            @if ($aiAnalyzing)
+                <div class="flex flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-6 py-12 dark:border-slate-800 dark:bg-slate-900/50">
+                    <flux:icon.arrow-path class="size-8 animate-spin text-violet-600" />
+                    <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Analyse des données cliniques en cours…</p>
+                </div>
+            @elseif ($aiError)
+                <flux:callout variant="danger" icon="exclamation-triangle">
+                    <flux:callout.heading>Analyse indisponible</flux:callout.heading>
+                    {{ $aiError }}
+                </flux:callout>
+            @elseif ($aiAnalysis)
+                <div class="ai-analysis-markdown rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                    {!! $this->aiAnalysisHtml !!}
+                </div>
+                <p class="text-xs text-slate-500">
+                    Généré par IA — à valider par le praticien responsable. Ne constitue pas un diagnostic.
+                </p>
+            @endif
+
+            <div class="flex justify-end gap-2">
+                <flux:button variant="ghost" wire:click="closeAiModal">Fermer</flux:button>
+                @if (! $aiAnalyzing && $aiAnalysis)
+                    <flux:button variant="primary" icon="sparkles" wire:click="runDeepAnalysis" wire:loading.attr="disabled" wire:target="runDeepAnalysis">
+                        Relancer l'analyse
+                    </flux:button>
+                @endif
+            </div>
+        </div>
+    </flux:modal>
 </div>
+
+<style>
+    .ai-analysis-markdown h3 {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgb(79 70 229);
+    }
+    .dark .ai-analysis-markdown h3 {
+        color: rgb(165 180 252);
+    }
+    .ai-analysis-markdown h3 + ul {
+        margin-top: 0;
+    }
+    .ai-analysis-markdown ul {
+        margin: 0 0 1.25rem 0;
+        padding-left: 1.25rem;
+        list-style-type: disc;
+    }
+    .ai-analysis-markdown li {
+        margin-bottom: 0.375rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: rgb(51 65 85);
+    }
+    .dark .ai-analysis-markdown li {
+        color: rgb(203 213 225);
+    }
+    .ai-analysis-markdown h3:last-of-type + p,
+    .ai-analysis-markdown p:last-child {
+        margin-bottom: 0;
+        font-size: 0.875rem;
+        line-height: 1.625;
+        color: rgb(30 41 59);
+    }
+    .dark .ai-analysis-markdown h3:last-of-type + p,
+    .dark .ai-analysis-markdown p:last-child {
+        color: rgb(226 232 240);
+    }
+    .ai-analysis-markdown strong {
+        font-weight: 600;
+        color: rgb(15 23 42);
+    }
+    .dark .ai-analysis-markdown strong {
+        color: rgb(248 250 252);
+    }
+</style>
 
 @script
 <script>

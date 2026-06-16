@@ -46,6 +46,23 @@ class PatientEvolutionMetricsService
 
     /**
      * @param  array<string, mixed>  $filters
+     * @return Collection<int, Consultation>
+     */
+    public function consultationsForAnalysis(int $patientId, array $filters = [], int $limit = 25): Collection
+    {
+        $range = $this->resolvePeriod($filters);
+
+        return $this->baseQuery($patientId, $filters, $range['start'], $range['end'])
+            ->with(['departement:id,name', 'user:id,name'])
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->sortBy('created_at')
+            ->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
     private function buildDashboard(int $patientId, array $filters): array

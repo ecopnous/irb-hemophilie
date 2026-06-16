@@ -9,10 +9,14 @@ use App\Models\Laboratoire;
 use App\Models\liaison\Image;
 use App\Models\prescription\Medicament;
 use App\Models\prescription\Prescription;
+use App\Services\ConsultationContextBuilder;
+use App\Services\GeminiService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -44,6 +48,11 @@ new #[Title('Fiche de consultation')] class extends Component {
     public string $rendezVousHeure = '08:00';
     public string $rendezVousMotif = '';
     public array $symptome_ids = [];
+
+    public bool $showAiModal = false;
+    public bool $aiAnalyzing = false;
+    public ?string $aiAnalysis = null;
+    public ?string $aiError = null;
 
     public function mount(int $id): void
     {
@@ -750,6 +759,51 @@ new #[Title('Fiche de consultation')] class extends Component {
         return filled($value);
     }
 
+    public function runDiagnosisAnalysis(): void
+    {
+        $this->aiError = null;
+        $this->aiAnalysis = null;
+        $this->aiAnalyzing = true;
+        $this->showAiModal = true;
+
+        $payload = app(ConsultationContextBuilder::class)->build($this->consultation);
+
+        if (! $payload['has_data']) {
+            $this->aiError = 'Renseignez au minimum des symptômes, une anamnèse, un examen clinique ou des constantes vitales avant de lancer l\'analyse.';
+            $this->aiAnalyzing = false;
+
+            return;
+        }
+
+        $result = app(GeminiService::class)->analyzeConsultationDiagnosis($payload['context']);
+
+        if (blank($result)) {
+            $this->aiError = 'L\'analyse n\'a pas pu être générée. Vérifiez la configuration de l\'API Gemini ou réessayez.';
+        } else {
+            $this->aiAnalysis = trim($result);
+        }
+
+        $this->aiAnalyzing = false;
+    }
+
+    public function closeAiModal(): void
+    {
+        $this->showAiModal = false;
+    }
+
+    #[Computed]
+    public function aiAnalysisHtml(): string
+    {
+        if (blank($this->aiAnalysis)) {
+            return '';
+        }
+
+        return Str::markdown($this->aiAnalysis, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
+    }
+
     public function patientIdentity(): string
     {
         $patient = $this->consultation->dossierPatient;
@@ -1179,6 +1233,30 @@ new #[Title('Fiche de consultation')] class extends Component {
                                     </div>
                                 </div>
                             @endforeach
+                        </div>
+
+                        <div class="border-t border-violet-100 bg-linear-to-r from-violet-50/80 to-indigo-50/50 px-5 py-5 dark:border-violet-500/20 dark:from-violet-950/30 dark:to-indigo-950/20">
+                            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">
+                                        Aide à la décision
+                                    </p>
+                                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                                        Orientation diagnostique basée sur les éléments cliniques saisis (ne remplace pas le jugement médical).
+                                    </p>
+                                </div>
+                                <flux:button
+                                    variant="primary"
+                                    icon="sparkles"
+                                    wire:click="runDiagnosisAnalysis"
+                                    wire:loading.attr="disabled"
+                                    wire:target="runDiagnosisAnalysis"
+                                    class="shrink-0"
+                                >
+                                    <span wire:loading.remove wire:target="runDiagnosisAnalysis">Aide au diagnostic</span>
+                                    <span wire:loading wire:target="runDiagnosisAnalysis">Analyse en cours…</span>
+                                </flux:button>
+                            </div>
                         </div>
                     </section>
 
@@ -2280,5 +2358,94 @@ new #[Title('Fiche de consultation')] class extends Component {
             </div>
         </x-slot:footer>
     </x-modal>
+
+    <flux:modal wire:model.self="showAiModal" class="max-w-3xl">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">Aide au diagnostic</flux:heading>
+                <flux:subheading>
+                    {{ $this->patientIdentity() }} · {{ $consultation->reference }}
+                </flux:subheading>
+            </div>
+
+            @if ($aiAnalyzing)
+                <div class="flex flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-6 py-12 dark:border-slate-800 dark:bg-slate-900/50">
+                    <flux:icon.arrow-path class="size-8 animate-spin text-violet-600" />
+                    <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Analyse des éléments cliniques en cours…</p>
+                </div>
+            @elseif ($aiError)
+                <flux:callout variant="danger" icon="exclamation-triangle">
+                    <flux:callout.heading>Analyse indisponible</flux:callout.heading>
+                    {{ $aiError }}
+                </flux:callout>
+            @elseif ($aiAnalysis)
+                <div class="ai-analysis-markdown rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                    {!! $this->aiAnalysisHtml !!}
+                </div>
+                <p class="text-xs text-slate-500">
+                    Généré par IA — hypothèses orientatives à valider par le praticien. Ne constitue pas un diagnostic définitif.
+                </p>
+            @endif
+
+            <div class="flex justify-end gap-2">
+                <flux:button variant="ghost" wire:click="closeAiModal">Fermer</flux:button>
+                @if (! $aiAnalyzing && $aiAnalysis)
+                    <flux:button variant="primary" icon="sparkles" wire:click="runDiagnosisAnalysis" wire:loading.attr="disabled" wire:target="runDiagnosisAnalysis">
+                        Relancer l'analyse
+                    </flux:button>
+                @endif
+            </div>
+        </div>
+    </flux:modal>
+
+    <style>
+        .ai-analysis-markdown h3 {
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgb(79 70 229);
+        }
+        .dark .ai-analysis-markdown h3 {
+            color: rgb(165 180 252);
+        }
+        .ai-analysis-markdown h3 + ul {
+            margin-top: 0;
+        }
+        .ai-analysis-markdown ul {
+            margin: 0 0 1.25rem 0;
+            padding-left: 1.25rem;
+            list-style-type: disc;
+        }
+        .ai-analysis-markdown li {
+            margin-bottom: 0.375rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: rgb(51 65 85);
+        }
+        .dark .ai-analysis-markdown li {
+            color: rgb(203 213 225);
+        }
+        .ai-analysis-markdown h3:last-of-type + p,
+        .ai-analysis-markdown p:last-child {
+            margin-bottom: 0;
+            font-size: 0.875rem;
+            line-height: 1.625;
+            color: rgb(30 41 59);
+        }
+        .dark .ai-analysis-markdown h3:last-of-type + p,
+        .dark .ai-analysis-markdown p:last-child {
+            color: rgb(226 232 240);
+        }
+        .ai-analysis-markdown strong {
+            font-weight: 600;
+            color: rgb(15 23 42);
+        }
+        .dark .ai-analysis-markdown strong {
+            color: rgb(248 250 252);
+        }
+    </style>
 
 </x-pages::consultation.layout>

@@ -2,6 +2,7 @@
 
 use App\Models\Configs\Acte;
 use App\Models\Configs\Departement;
+use App\Models\Configs\GroupeExamen;
 use App\Models\Configs\PacquetSoin;
 use App\Models\Consultation;
 use App\Models\DossierPatient;
@@ -24,9 +25,9 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public $service_id;
     public $acte_ids = [];
     public $user_ids = [];
-    public $assurance_id;
     public $projet_id;
     public $pacquet_soin_id;
+    public $groupe_examen_id;
     /** @var \Illuminate\Support\Collection<int, \App\Models\Configs\Acte> */
     public $paquetActes;
     public bool $use_project_period = true;
@@ -65,7 +66,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
     public function updatedType($value): void
     {
-        $this->reset(['departement_id', 'service_id', 'acte_ids', 'user_ids', 'ref', 'depistage_target', 'pacquet_soin_id', 'paquetActes', 'use_project_period', 'new_visite', 'next_visit_date', 'next_visit_time']);
+        $this->reset(['departement_id', 'service_id', 'acte_ids', 'user_ids', 'ref', 'depistage_target', 'pacquet_soin_id', 'groupe_examen_id', 'paquetActes', 'use_project_period', 'new_visite', 'next_visit_date', 'next_visit_time']);
 
         if ($this->isDepistageType($value)) {
             $this->depistage_target = 'laboratoire';
@@ -81,8 +82,31 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
     public function updatedDepistageTarget(): void
     {
-        $this->reset(['acte_ids', 'pacquet_soin_id', 'paquetActes', 'departement_id', 'service_id', 'ref']);
+        $this->reset(['acte_ids', 'pacquet_soin_id', 'groupe_examen_id', 'paquetActes', 'departement_id', 'service_id', 'ref']);
         $this->applyDepistageTargetDefaults();
+    }
+
+    public function updatedGroupeExamenId($value): void
+    {
+        if (!$value) {
+            return;
+        }
+
+        $groupe = GroupeExamen::query()
+            ->active()
+            ->with('actes:id')
+            ->find($value);
+
+        if (!$groupe) {
+            return;
+        }
+
+        $this->acte_ids = $groupe->actes
+            ->pluck('id')
+            ->map(fn($id) => (string) $id)
+            ->all();
+
+        $this->syncDepistageReferenceFromActes();
     }
 
     public function updatedPacquetSoinId($value): void
@@ -373,7 +397,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'type_visite' => 'required|in:standard,hémophilie,drépanocytose',
                 'depistage_target' => $this->isDepistageType() ? 'required|in:laboratoire,imagerie,pacquet_soins' : 'nullable',
                 'departement_id' => $this->isConsultationType() ? 'required|exists:departements,id' : 'nullable',
-                'assurance_id' => 'nullable|exists:assurances,id',
                 'projet_id' => 'nullable|exists:projets,id',
                 'use_project_period' => 'boolean',
                 'new_visite' => 'boolean',
@@ -381,6 +404,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'next_visit_time' => $this->new_visite ? 'nullable|date_format:H:i' : 'nullable|date_format:H:i',
                 'service_id' => 'nullable|exists:services,id',
                 'pacquet_soin_id' => $this->isDepistageType() && $this->depistage_target === 'pacquet_soins' ? 'required|exists:pacquet_soins,id' : 'nullable',
+                'groupe_examen_id' => $this->isDepistageType() && $this->depistage_target === 'laboratoire' ? 'nullable|exists:groupe_examens,id' : 'nullable',
                 'acte_ids' => 'required|array|min:1',
                 'acte_ids.*' => 'exists:actes,id',
                 'user_ids' => 'nullable|array',
@@ -421,7 +445,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                     'dossier_patient_id' => $this->patient->id,
                     'departement_id' => $this->resolvedDepartementId(),
                     'projet_id' => $validated['projet_id'] ?? null,
-                    'assurance_id' => $validated['assurance_id'] ?? null,
+                    'assurance_id' => null,
                     'service_id' => $this->isConsultationType() ? $validated['service_id'] ?? null : null,
                     'hopital_id' => current_hopital_id(),
                     'created_at' => $consultationAt,
@@ -498,7 +522,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                         'dossier_patient_id' => $this->patient->id,
                         'departement_id' => $this->resolvedDepartementId(),
                         'projet_id' => $validated['projet_id'] ?? null,
-                        'assurance_id' => $validated['assurance_id'] ?? null,
+                        'assurance_id' => null,
                         'service_id' => $validated['service_id'] ?? null,
                         'hopital_id' => current_hopital_id(),
                         'is_visite_program' => true,
@@ -742,16 +766,13 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 </div>
 
                 <div>
-                    <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Équipe & prise en
-                        charge</p>
-                    <div class="grid gap-4 md:grid-cols-3">
+                    <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Équipe & projet</p>
+                    <div class="grid gap-4 md:grid-cols-2">
                         <x-select.styled label="Membre de l'équipe" placeholder="Choisir..." wire:model="user_ids"
                             :request="[
                                 'url' => route('api.usersIn'),
                                 'params' => ['hopital_id' => current_hopital_id()],
                             ]" select="label:name|value:id" multiple />
-                        <x-select.styled label="Prise en charge" placeholder="Choisir..." wire:model="assurance_id"
-                            :request="route('api.assurances')" select="label:name|value:id" searchable />
                         <x-select.styled label="Projet associé" placeholder="Choisir ou créer"
                             wire:model.live="projet_id" :request="route('api.projets')" select="label:name|value:id"
                             searchable />
@@ -896,8 +917,14 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
-                    <x-select.styled label="Prise en charge" placeholder="Choisir..." wire:model="assurance_id"
-                        :request="route('api.assurances')" select="label:name|value:id" searchable />
+                    <x-select.styled label="Projet associé" placeholder="Choisir ou créer" wire:model.live="projet_id"
+                        :request="route('api.projets')" select="label:name|value:id" searchable />
+
+                    <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
+                                wire:model="user_ids" :request="[
+                                    'url' => route('api.usersIn'),
+                                    'params' => ['hopital_id' => current_hopital_id()],
+                                ]" select="label:name|value:id" multiple />
                 </div>
 
                 @if ($depistage_target === 'laboratoire')
@@ -905,15 +932,13 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                         <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Laboratoire</p>
                         <div class="grid gap-4 md:grid-cols-3">
                             <x-input label="Département" :value="$this->laboratoireDepartement()?->name ?? 'Laboratoire'" disabled />
+                            <x-select.styled label="Groupe d'examens" wire:model.live="groupe_examen_id"
+                                :request="route('api.groupeExamens')" select="label:name|value:id" searchable
+                                placeholder="Choisir un groupe (optionnel)" />
                             <x-select.styled label="Examens de laboratoire *" wire:model="acte_ids" :request="[
                                 'url' => route('api.actes'),
                                 'params' => ['departement' => $this->laboratoireDepartement()?->id],
                             ]" select="label:name|value:id" multiple />
-                            <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
-                                wire:model="user_ids" :request="[
-                                    'url' => route('api.usersIn'),
-                                    'params' => ['hopital_id' => current_hopital_id()],
-                                ]" select="label:name|value:id" multiple />
                         </div>
                     </div>
                 @endif
@@ -921,17 +946,12 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 @if ($depistage_target === 'imagerie')
                     <div>
                         <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Imagerie</p>
-                        <div class="grid gap-4 md:grid-cols-3">
+                        <div class="grid gap-4 md:grid-cols-2">
                             <x-input label="Département" :value="$this->imagerieDepartement()?->name ?? 'Imagerie'" disabled />
                             <x-select.styled label="Actes d'imagerie *" wire:model="acte_ids" :request="[
                                 'url' => route('api.actes'),
                                 'params' => ['departement' => $this->imagerieDepartement()?->id],
                             ]" select="label:name|value:id" multiple />
-                            <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
-                                wire:model="user_ids" :request="[
-                                    'url' => route('api.usersIn'),
-                                    'params' => ['hopital_id' => current_hopital_id()],
-                                ]" select="label:name|value:id" multiple />
                         </div>
                     </div>
                 @endif
@@ -940,14 +960,9 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                     <div>
                         <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Paquet de soins
                         </p>
-                        <div class="grid gap-4 md:grid-cols-3">
+                        <div class="grid gap-4 md:grid-cols-2">
                             <x-select.styled label="Paquet de soins *" wire:model.live="pacquet_soin_id"
                                 :request="route('api.pacquetSoins')" select="label:name|value:id" searchable />
-                            <x-select.styled label="Membre de l'équipe" placeholder="Choisir..."
-                                wire:model="user_ids" :request="[
-                                    'url' => route('api.usersIn'),
-                                    'params' => ['hopital_id' => current_hopital_id()],
-                                ]" select="label:name|value:id" multiple />
                             <x-input label="Référence département" :value="$ref ?: 'Auto'" disabled />
                         </div>
 

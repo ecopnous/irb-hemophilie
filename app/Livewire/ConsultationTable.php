@@ -57,6 +57,7 @@ final class ConsultationTable extends PowerGridComponent
                 'dossierPatient:id,nom,postnom,prenom,genre,date_naissance',
                 'departement:id,name',
                 'user:id,name',
+                'projet:id,name',
             ])
             ->where(function (Builder $query) {
                 $query->whereNotNull('user_id')
@@ -83,6 +84,7 @@ final class ConsultationTable extends PowerGridComponent
             ->add('patient_genre', fn (Consultation $consultation) => $consultation->dossierPatient?->genre)
             ->add('patient_age_bracket', fn () => null)
             ->add('projet_id', fn (Consultation $consultation) => $consultation->projet_id)
+            ->add('projet', fn (Consultation $consultation) => $consultation->projet?->name ?? '-')
             ->add('is_clore', fn (Consultation $consultation) => $consultation->is_clore)
             ->add('is_clore_label', fn (Consultation $consultation) => $consultation->is_clore ? 'Classé' : 'Ouvert')
             ->add('departement_id', fn (Consultation $consultation) => $consultation->departement_id)
@@ -159,8 +161,11 @@ final class ConsultationTable extends PowerGridComponent
                 ->bodyAttribute('text-xs')
                 ->sortable(),
 
-            Column::make('Projet', 'projet_id', 'projet_id')
-                ->hidden(),
+            Column::make('Projet', 'projet', 'projet_id')
+                ->visibleInExport(false)
+                ->bodyAttribute('text-xs')
+                ->sortable()
+                ->searchable(),
 
             Column::make('T°C', 'temperature')
                 ->visibleInExport(false)
