@@ -24,12 +24,12 @@ new #[Title('Fiche assurance'), Layout('layouts::app.other.support_tech')] class
     #[Computed]
     public function stats(): array
     {
-        $consultationBase = Consultation::query()->where('assurance_id', $this->assurance->id);
+        $consultationBase = Consultation::query()->forAssurance($this->assurance->id);
 
         return [
             'projets' => (int) $this->assurance->projets_count,
             'patients' => (int) $this->assurance->patients_count,
-            'consultations' => (int) $this->assurance->consultations_count,
+            'consultations' => (int) (clone $consultationBase)->count(),
             'ce_mois' => (int) (clone $consultationBase)
                 ->whereMonth('created_at', now()->month)
                 ->whereYear('created_at', now()->year)

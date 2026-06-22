@@ -18,9 +18,9 @@ class GeminiService
     }
 
     /**
-     * Analyse l'évolution clinique d'un patient via Gemini.
+     * @return array{text: ?string, user_error: ?string}
      */
-    public function analyzePatientEvolution(string $clinicalContext): ?string
+    public function analyzePatientEvolution(string $clinicalContext): array
     {
         return $this->generateWithSystemPrompt(
             config('gemini.patient_evolution_system_prompt'),
@@ -29,9 +29,9 @@ class GeminiService
     }
 
     /**
-     * Aide au diagnostic pour une consultation en cours via Gemini.
+     * @return array{text: ?string, user_error: ?string}
      */
-    public function analyzeConsultationDiagnosis(string $clinicalContext): ?string
+    public function analyzeConsultationDiagnosis(string $clinicalContext): array
     {
         return $this->generateWithSystemPrompt(
             config('gemini.consultation_diagnosis_system_prompt'),
@@ -46,18 +46,23 @@ class GeminiService
     {
         $prompt = "Analyse le texte suivant et donnes-en une conclusion claire, concise et structurée :\n\n" . $texteAAnalyser;
 
-        return $this->generateWithSystemPrompt(null, $prompt);
+        return $this->generateWithSystemPrompt(null, $prompt)['text'];
     }
 
     /**
      * Appel générique à l'API Gemini avec instruction système optionnelle.
+     *
+     * @return array{text: ?string, user_error: ?string}
      */
-    public function generateWithSystemPrompt(?string $systemPrompt, string $userContent): ?string
+    public function generateWithSystemPrompt(?string $systemPrompt, string $userContent): array
     {
         if (blank($this->apiKey)) {
             Log::error('Clé API Gemini non configurée (GEMINI_API_KEY).');
 
-            return null;
+            return [
+                'text' => null,
+                'user_error' => 'La clé API Gemini n\'est pas configurée (GEMINI_API_KEY).',
+            ];
         }
 
         $model = 'gemini-2.5-flash:generateContent';
@@ -93,17 +98,40 @@ class GeminiService
 
             if ($response->successful()) {
                 $result = $response->json();
+                $text = $result['candidates'][0]['content']['parts'][0]['text'] ?? null;
 
-                return $result['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                if (blank($text)) {
+                    return [
+                        'text' => null,
+                        'user_error' => 'L\'analyse n\'a pas pu être générée. Réessayez dans quelques instants.',
+                    ];
+                }
+
+                return ['text' => $text, 'user_error' => null];
             }
 
             Log::error('Erreur API Gemini : ' . $response->body());
 
-            return null;
+            return [
+                'text' => null,
+                'user_error' => $this->userErrorForStatus($response->status()),
+            ];
         } catch (\Exception $e) {
             Log::error('Exception lors de l\'appel à Gemini : ' . $e->getMessage());
 
-            return null;
+            return [
+                'text' => null,
+                'user_error' => 'Impossible de joindre le service d\'analyse. Réessayez dans quelques instants.',
+            ];
         }
+    }
+
+    protected function userErrorForStatus(int $status): string
+    {
+        return match (true) {
+            in_array($status, [429, 503], true) => 'Le service d\'analyse est temporairement surchargé. Réessayez dans quelques instants.',
+            $status === 401, $status === 403 => 'La clé API Gemini est invalide ou n\'a pas les permissions nécessaires.',
+            default => 'L\'analyse n\'a pas pu être générée. Vérifiez la configuration de l\'API Gemini ou réessayez.',
+        };
     }
 }

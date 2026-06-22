@@ -3,7 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Consultation;
+use App\Models\Imagerie;
+use App\Models\Laboratoire;
 use App\Observers\ConsultationObserver;
+use App\Observers\ImagerieObserver;
+use App\Observers\LaboratoireObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Date;
@@ -29,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Consultation::observe(ConsultationObserver::class);
+        Laboratoire::observe(LaboratoireObserver::class);
+        Imagerie::observe(ImagerieObserver::class);
 
         $this->ensurePublicStorageLink();
         $this->configureDefaults();

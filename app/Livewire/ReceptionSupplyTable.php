@@ -8,13 +8,17 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
 use PowerComponents\LivewirePowerGrid\Button;
 use PowerComponents\LivewirePowerGrid\Column;
+use PowerComponents\LivewirePowerGrid\Components\SetUp\Exportable;
 use PowerComponents\LivewirePowerGrid\Facades\Filter;
 use PowerComponents\LivewirePowerGrid\Facades\PowerGrid;
 use PowerComponents\LivewirePowerGrid\PowerGridComponent;
 use PowerComponents\LivewirePowerGrid\PowerGridFields;
+use PowerComponents\LivewirePowerGrid\Traits\WithExport;
 
 final class ReceptionSupplyTable extends PowerGridComponent
 {
+    use WithExport;
+
     public string $tableName = 'receptionSupplyTable';
 
     public int $rowCounter = 0;
@@ -24,6 +28,8 @@ final class ReceptionSupplyTable extends PowerGridComponent
         $this->rowCounter = 0;
 
         return [
+            PowerGrid::exportable(fileName: 'papeterie')
+                ->type(Exportable::TYPE_XLS, Exportable::TYPE_CSV),
             PowerGrid::header()->showSearchInput(),
             PowerGrid::footer()->showPerPage()->showRecordCount(),
         ];
@@ -54,6 +60,9 @@ final class ReceptionSupplyTable extends PowerGridComponent
         return PowerGrid::fields()
             ->add('row_num', fn () => ++$this->rowCounter)
             ->add('designation_export', fn (ReceptionSupply $item) => $item->designation)
+            ->add('reference_export', fn (ReceptionSupply $item) => $item->reference ?: '—')
+            ->add('stock_gap', fn (ReceptionSupply $item) => $item->stockGap())
+            ->add('status_export', fn (ReceptionSupply $item) => $item->is_active ? 'Actif' : 'Inactif')
             ->add('article', function (ReceptionSupply $item) {
                 return Blade::render(
                     '<div class="space-y-1">
@@ -137,10 +146,19 @@ final class ReceptionSupplyTable extends PowerGridComponent
     {
         return [
             Column::make('#', 'row_num')->bodyAttribute('text-xs font-semibold text-center w-10'),
-            Column::make('Article', 'article', 'designation_export')
+            Column::make('Article', 'article')
                 ->sortable()
                 ->searchable()
-                ->bodyAttribute('text-xs'),
+                ->bodyAttribute('text-xs')
+                ->visibleInExport(false),
+            Column::make('Designation', 'designation_export', 'designation')
+                ->sortable()
+                ->searchable()
+                ->hidden(),
+            Column::make('Reference', 'reference_export', 'reference')
+                ->sortable()
+                ->searchable()
+                ->hidden(),
             Column::make('Categorie', 'category_label', 'category')
                 ->sortable()
                 ->searchable()
@@ -154,9 +172,17 @@ final class ReceptionSupplyTable extends PowerGridComponent
                 ->bodyAttribute('text-xs text-center'),
             Column::make('En stock', 'stock_view', 'current_stock')
                 ->sortable()
-                ->bodyAttribute('text-xs'),
+                ->bodyAttribute('text-xs')
+                ->visibleInExport(false),
+            Column::make('En stock', 'current_stock', 'current_stock')
+                ->hidden(),
+            Column::make('Manquant', 'stock_gap', 'stock_gap')
+                ->hidden(),
             Column::make('Statut', 'status_badge')
-                ->bodyAttribute('text-xs'),
+                ->bodyAttribute('text-xs')
+                ->visibleInExport(false),
+            Column::make('Statut', 'status_export', 'is_active')
+                ->hidden(),
             Column::action('Actions'),
         ];
     }

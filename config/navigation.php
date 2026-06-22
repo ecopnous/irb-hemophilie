@@ -66,7 +66,7 @@ return [
     // ['area' => 'services_base', 'label' => 'Service de base', 'icon' => 'sparkles', 'route' => 'reception.services', 'group' => 'main'],
     ['area' => 'triage', 'label' => 'Triage', 'icon' => 'inbox', 'route' => 'consultation.triage', 'group' => 'main'],
     ['area' => 'consultation', 'label' => 'Consultations', 'icon' => 'stethoscope', 'route' => 'consultation.index', 'group' => 'main'],
-    ['area' => 'comptabilite', 'label' => 'Comptabilité', 'icon' => 'banknotes', 'route' => 'facturation.index', 'group' => 'main'],
+    ['area' => 'comptabilite', 'label' => 'Comptabilité', 'icon' => 'banknotes', 'route' => 'facturation.dashboard', 'group' => 'main'],
     ['area' => 'laboratoire', 'label' => 'Laboratoire', 'icon' => 'beaker', 'route' => 'laboratoire.index', 'group' => 'main'],
     ['area' => 'imagerie', 'label' => 'Imagerie', 'icon' => 'photo', 'route' => 'imagerie.index', 'group' => 'main'],
     ['area' => 'pharmacie', 'label' => 'Pharmacie', 'icon' => 'pill', 'route' => 'pharmacie.dashboard', 'group' => 'main'],
@@ -89,7 +89,7 @@ return [
     ['area' => 'services_base', 'label' => 'Service de base', 'description' => 'Equipement menager', 'icon' => 'briefcase', 'route' => 'reception.services'],
     ['area' => 'triage', 'label' => 'Triage', 'description' => 'Patients à orienter', 'icon' => null, 'route' => 'consultation.triage', 'badge' => 'triage'],
     ['area' => 'laboratoire', 'label' => 'Laboratoire', 'description' => 'Bons en circulation', 'icon' => null, 'route' => 'laboratoire.index', 'badge' => 'laboratoire'],
-    ['area' => 'comptabilite', 'label' => 'Facturation', 'description' => 'Dossiers à traiter', 'icon' => null, 'route' => 'facturation.index', 'badge' => 'facturation'],
+    ['area' => 'comptabilite', 'label' => 'Facturation', 'description' => 'Dossiers à traiter', 'icon' => null, 'route' => 'facturation.dashboard', 'badge' => 'facturation'],
     ['area' => 'imagerie', 'label' => 'Imagerie', 'description' => 'Demandes associées', 'icon' => null, 'route' => 'imagerie.index', 'badge' => 'imagerie'],
   ],
 ];

@@ -193,6 +193,11 @@ class DossierPatient extends Model
         return $this->hasMany(Hospitalisation::class, 'dossier_patient_id');
     }
 
+    public function clinicalMessages(): HasMany
+    {
+        return $this->hasMany(ClinicalMessage::class, 'dossier_patient_id');
+    }
+
     public function province(): BelongsTo
     {
         return $this->belongsTo(Province::class);

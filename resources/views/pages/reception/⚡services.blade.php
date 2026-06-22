@@ -253,7 +253,7 @@ new #[Title('Service de base reception'), Layout('layouts::app.other.reception')
 };
 ?>
 
-<section class="w-full space-y-6 p-4 md:p-6">
+<section class="mx-auto max-w-7xl space-y-6">
     <flux:heading class="sr-only">Service de base reception</flux:heading>
 
     <x-header_default
@@ -291,9 +291,7 @@ new #[Title('Service de base reception'), Layout('layouts::app.other.reception')
         </div>
     </div>
 
-    <div class="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70 md:p-6">
-        <livewire:reception-base-supply-table />
-    </div>
+    <livewire:reception-base-supply-table />
 
     <flux:modal wire:model.self="showFormModal" class="max-w-2xl">
         <div class="space-y-5">

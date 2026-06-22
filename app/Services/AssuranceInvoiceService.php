@@ -26,11 +26,11 @@ class AssuranceInvoiceService
         $consultations = Consultation::query()
             ->with([
                 'dossierPatient',
-                'projet',
+                'projet.assurance.categorisation',
                 'departement',
                 'actes.departement',
             ])
-            ->where('assurance_id', $assurance->id)
+            ->forAssurance($assurance->id)
             ->when($hopitalId, fn ($query) => $query->whereHopitalId($hopitalId))
             ->when($projetId, fn ($query) => $query->where('projet_id', $projetId))
             ->whereBetween('created_at', [$periodStart->copy()->startOfDay(), $periodEnd->copy()->endOfDay()])
@@ -94,6 +94,7 @@ class AssuranceInvoiceService
                             'reference' => $acte->pivot->ref ?: ($consultation->reference ?: $acte->code ?: '—'),
                             'consultation_reference' => $consultation->reference,
                             'acte' => $acte->name,
+                            'categorie' => $assurance->categorisation?->name ?? 'N/A',
                             'departement' => $acte->departement?->name ?? $consultation->departement?->name ?? '—',
                             'date' => $consultation->created_at,
                             'prix' => $montant,
@@ -163,7 +164,7 @@ class AssuranceInvoiceService
         $periodEnd ??= now()->endOfMonth();
 
         $consultations = Consultation::query()
-            ->where('assurance_id', $assurance->id)
+            ->forAssurance($assurance->id)
             ->when($hopitalId, fn ($query) => $query->whereHopitalId($hopitalId))
             ->whereBetween('created_at', [$periodStart->copy()->startOfDay(), $periodEnd->copy()->endOfDay()])
             ->whereHas('actes')

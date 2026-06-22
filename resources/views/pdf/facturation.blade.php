@@ -275,40 +275,45 @@
             <thead>
                 <tr>
                     <th class="text-left" style="width: 45%;">Description</th>
-                    <th class="text-right" style="width: 15%;">Prix Unit. HT</th>
-                    <th class="text-right" style="width: 10%;">Quantite</th>
-                    <th class="text-right" style="width: 12%;">Total HT</th>
+                    <th class="text-right" style="width: 10%;">Brut</th>
+                    <th class="text-right" style="width: 10%;">Categorie</th>
+                    <th class="text-right" style="width: 10%;">Assurance</th>
+                    <th class="text-right" style="width: 10%;">Patient</th>
                     <th class="text-right" style="width: 10%;">TVA</th>
-                    <th class="text-right" style="width: 13%;">Total TTC</th>
+                    <th class="text-right" style="width: 10%;">Total TTC</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($actes as $acte)
+                @forelse($billingLines as $line)
                     @php
-                        $amount = (float) ($acte->pivot->montant ?? 0);
-                        $lineTva = $amount * $tvaRate;
-                        $lineTtc = $amount + $lineTva;
+                        $amount = (float) ($line['amount'] ?? 0);
+                        $linePatient = (float) ($line['patient_amount'] ?? 0);
+                        $lineAssurance = (float) ($line['assurance_amount'] ?? 0);
+                        $lineCoverage = (float) ($line['coverage'] ?? 0);
+                        $lineTva = $linePatient * $tvaRate;
+                        $lineTtc = $linePatient + $lineTva;
                     @endphp
                     <tr>
                         <td class="vertical-top">
-                            <div class="item-name">{{ $acte->name }}</div>
+                            <div class="item-name">{{ $line['acte']->name }}</div>
                             <div class="item-desc">
-                                {{ $acte->departement?->name ?? 'Departement non defini' }}
-                                @if ($acte->service?->name)
-                                    - {{ $acte->service->name }}
+                                {{ $line['acte']->departement?->name ?? 'Departement non defini' }}
+                                @if ($line['acte']->service?->name)
+                                    - {{ $line['acte']->service->name }}
                                 @endif
                             </div>
                         </td>
                         <td class="text-right vertical-top">{{ $money($amount) }}</td>
-                        <td class="text-right vertical-top">1</td>
-                        <td class="text-right vertical-top">{{ $money($amount) }}</td>
+                        <td class="text-right vertical-top">{{ $categoryName }} ({{ number_format($lineCoverage, 0, ',', ' ') }}%)</td>
+                        <td class="text-right vertical-top">{{ $money($lineAssurance) }}</td>
+                        <td class="text-right vertical-top">{{ $money($linePatient) }}</td>
                         <td class="text-right vertical-top">{{ number_format($tvaRate * 100, 0, ',', ' ') }} %<span
                                 class="tva-details">{{ $money($lineTva) }}</span></td>
                         <td class="text-right vertical-top">{{ $money($lineTtc) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="text-right">Aucun acte facture pour cette consultation.</td>
+                        <td colspan="7" class="text-right">Aucun acte facture pour cette consultation.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -317,8 +322,9 @@
         <table class="w-100" style="margin-bottom: 20px;">
             <tr>
                 <td class="text-right" style="font-size: 12px; color: #333333;">
-                    <strong>Total TTC :</strong> {{ $money($totalTtc) }} &nbsp;&nbsp;&nbsp; <strong>Total HT :</strong>
-                    {{ $money($totalHt) }}
+                    <strong>Total brut :</strong> {{ $money($grossAmount) }} &nbsp;&nbsp;&nbsp;
+                    <strong>Part assurance :</strong> {{ $money($assuranceAmount) }} &nbsp;&nbsp;&nbsp;
+                    <strong>Net patient :</strong> {{ $money($totalHt) }}
                 </td>
             </tr>
         </table>
@@ -354,9 +360,19 @@
                 <td class="vertical-top" style="width: 55%;">
                     <table class="w-100" style="border-collapse: collapse;">
                         <tr class="fin-row gray-bg">
-                            <td><strong>Projet global</strong></td>
+                            <td><strong>Projet</strong></td>
                             <td class="text-right">{{ $consultation?->projet?->name ?? 'Aucun' }}</td>
                         </tr>
+                        @if (!empty($assuranceName) && $assuranceName !== 'Paiement direct')
+                            <tr class="fin-row gray-bg">
+                                <td><strong>Assurance</strong></td>
+                                <td class="text-right">{{ $assuranceName }}</td>
+                            </tr>
+                            <tr class="fin-row gray-bg">
+                                <td><strong>Prise en charge</strong></td>
+                                <td class="text-right">{{ $categoryName }} ({{ number_format((float) ($coverageRate ?? 0), 0, ',', ' ') }}%)</td>
+                            </tr>
+                        @endif
                         <tr class="fin-row gray-bg">
                             <td>Total HT</td>
                             <td class="text-right">{{ $money($totalHt) }}</td>

@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\facturation\Facturation;
+use App\Services\ConsultationBillingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
 use PowerComponents\LivewirePowerGrid\Column;
@@ -34,6 +35,7 @@ final class HistoriqueFacture extends PowerGridComponent
                 'dossierPatient',
                 'consultation.dossierPatient',
                 'consultation.departement',
+                'consultation.projet.assurance',
                 'consultation.assurance',
                 'consultation.user',
                 'consultation.projet',
@@ -56,8 +58,11 @@ final class HistoriqueFacture extends PowerGridComponent
     {
         $consultation = $facturation->consultation;
         $actes = $consultation?->actes ?? collect();
+        $billing = app(ConsultationBillingService::class);
 
-        $total = (float) $actes->sum(fn($acte) => (float) ($acte->pivot->montant ?? 0));
+        $total = $consultation
+            ? $billing->totals($consultation)['patient']
+            : (float) $actes->sum(fn ($acte) => (float) ($acte->pivot->montant ?? 0));
         $paid = (float) $facturation->payments()->whereNull('voided_at')->sum('amount');
         $remaining = max(0, $total - $paid);
 
@@ -148,14 +153,19 @@ final class HistoriqueFacture extends PowerGridComponent
                 );
             })
             ->add('prise_en_charge', function (Facturation $facturation) {
+                $consultation = $facturation->consultation;
+                $billing = app(ConsultationBillingService::class);
+
                 return Blade::render(
                     '<div class="space-y-1">
-                        <p class="font-semibold text-slate-900 dark:text-white">{{ $assurance }}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ $projet }}</p>
+                        <p class="font-semibold text-slate-900 dark:text-white">{{ $projet }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ $assurance }}</p>
                     </div>',
                     [
-                        'assurance' => $facturation->consultation?->assurance?->name ?? 'Paiement direct',
-                        'projet' => $facturation->consultation?->projet?->name ?? 'Aucun projet',
+                        'projet' => $consultation ? $billing->coverageLabel($consultation) : 'Paiement direct',
+                        'assurance' => $consultation && $billing->hasCoverage($consultation)
+                            ? $billing->assuranceName($consultation) . ' (' . number_format($billing->defaultCoverageRate($consultation), 0, ',', ' ') . '%)'
+                            : 'Sans assurance',
                     ]
                 );
             })

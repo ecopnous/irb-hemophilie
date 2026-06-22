@@ -3,10 +3,20 @@
 namespace App\Observers;
 
 use App\Models\Consultation;
+use App\Services\ClinicalMessagingService;
 use App\Services\DashboardMetricsService;
 
 class ConsultationObserver
 {
+    public function updated(Consultation $consultation): void
+    {
+        if ($consultation->wasChanged('is_clore') && $consultation->is_clore) {
+            app(ClinicalMessagingService::class)->sendConsultationClosedSummary($consultation);
+        }
+
+        $this->forgetDashboardCache($consultation);
+    }
+
     public function saved(Consultation $consultation): void
     {
         $this->forgetDashboardCache($consultation);

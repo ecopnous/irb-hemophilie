@@ -72,10 +72,48 @@ new #[Title('Fiche de consultation')] class extends Component {
     public function loadConsultation(int $id): void
     {
         $this->consultation = Consultation::query()
-            ->with(['dossierPatient', 'departement', 'service', 'user', 'assurance', 'projet', 'laboratoire.images', 'imagerie', 'prescription.medicaments', 'actes.departement', 'actes.service', 'consultationSource', 'symptomeItems', 'clinicalExam.filledBy', 'clinicalExamValues.definition'])
+            ->with(['dossierPatient', 'departement', 'service', 'user', 'projet.assurance.categorisation', 'assurance.categorisation', 'laboratoire.images', 'imagerie', 'prescription.medicaments', 'actes.departement', 'actes.service', 'consultationSource', 'symptomeItems', 'clinicalExam.filledBy', 'clinicalExamValues.definition'])
             ->findOrFail($id);
 
         $this->syncIssueForm();
+        $this->syncSymptomeForm();
+    }
+
+    public function syncSymptomeForm(): void
+    {
+        $this->symptome_ids = $this->consultation->symptomeItems
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+    }
+
+    public function updatedSymptomeIds(): void
+    {
+        if ($this->consultation->is_clore) {
+            $this->syncSymptomeForm();
+
+            return;
+        }
+
+        $this->saveSymptomes();
+    }
+
+    protected function saveSymptomes(): void
+    {
+        $validated = $this->validate([
+            'symptome_ids' => ['nullable', 'array'],
+            'symptome_ids.*' => ['exists:symptomes,id'],
+        ]);
+
+        $this->consultation->symptomeItems()->sync(
+            collect($validated['symptome_ids'] ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all(),
+        );
+
+        $this->consultation->load('symptomeItems');
     }
 
     public function syncIssueForm(): void
@@ -220,9 +258,6 @@ new #[Title('Fiche de consultation')] class extends Component {
             $this->textValue = (string) ($this->consultation->{$field} ?? '');
         }
 
-        if ($section === 'symptomes') {
-            $this->symptome_ids = $this->consultation->symptomeItems->pluck('id')->map(fn($id) => (string) $id)->all();
-        }
     }
 
     public function isLaboratoireActeValid($acte): bool
@@ -526,21 +561,6 @@ new #[Title('Fiche de consultation')] class extends Component {
             Prescription::query()->firstOrCreate(['consultation_id' => $this->consultation->id], ['dossier_patient_id' => $this->consultation->dossier_patient_id]);
         }
 
-        if ($this->currentSection === 'symptomes') {
-            $validated = $this->validate([
-                'symptome_ids' => ['nullable', 'array'],
-                'symptome_ids.*' => ['exists:symptomes,id'],
-            ]);
-
-            $this->consultation->symptomeItems()->sync(
-                collect($validated['symptome_ids'] ?? [])
-                    ->map(fn($id) => (int) $id)
-                    ->unique()
-                    ->values()
-                    ->all(),
-            );
-        }
-
         $this->loadConsultation($this->consultation->id);
         $this->dispatch('consultation-section-saved');
     }
@@ -550,13 +570,40 @@ new #[Title('Fiche de consultation')] class extends Component {
         return [
             'complement_anamnese' => 'complement_anamnese',
             'diagnostic_presomption' => 'diagnostic_presomption',
+            'diagnostic_certitude' => 'diagnostic_certitude',
             'plan_traitement_conduite' => 'plan_traitement_conduite',
         ];
     }
 
     public function narrativeSections(): array
     {
-        return [['key' => 'symptomes', 'title' => 'Symptômes', 'preview' => null], ['key' => 'complement_anamnese', 'title' => 'Complement d\'anamnese', 'preview' => $this->consultation->complement_anamnese], ['key' => 'diagnostic_presomption', 'title' => 'Diagnostic de presomption', 'preview' => $this->consultation->diagnostic_presomption], ['key' => 'diagnostic_certitude', 'title' => 'Diagnostic de certitude', 'preview' => $this->consultation->diagnostic_certitude], ['key' => 'plan_traitement_conduite', 'title' => 'Plan de traitement et conduite a tenir', 'preview' => $this->consultation->plan_traitement_conduite]];
+        return [
+            ['key' => 'complement_anamnese', 'title' => 'Complement d\'anamnese', 'preview' => $this->consultation->complement_anamnese],
+            ['key' => 'diagnostic_presomption', 'title' => 'Diagnostic de presomption', 'preview' => $this->consultation->diagnostic_presomption],
+            ['key' => 'diagnostic_certitude', 'title' => 'Diagnostic de certitude', 'preview' => $this->consultation->diagnostic_certitude],
+            ['key' => 'plan_traitement_conduite', 'title' => 'Plan de traitement et conduite a tenir', 'preview' => $this->consultation->plan_traitement_conduite],
+        ];
+    }
+
+    public function narrativeSection(string $key): array
+    {
+        return collect($this->narrativeSections())->firstWhere('key', $key) ?? [
+            'key' => $key,
+            'title' => $key,
+            'preview' => null,
+        ];
+    }
+
+    public function narrativeSectionTitle(?string $key): string
+    {
+        return collect($this->narrativeSections())->firstWhere('key', $key)['title']
+            ?? match ($key) {
+                'vitals' => 'Signes vitaux',
+                'laboratoire' => 'Demande laboratoire',
+                'imagerie' => 'Demande imagerie',
+                'prescription' => 'Prescription medicale',
+                default => 'Edition de la consultation',
+            };
     }
 
     public function openClinicalExamEditor(): void
@@ -842,10 +889,10 @@ new #[Title('Fiche de consultation')] class extends Component {
 
         $result = app(GeminiService::class)->analyzeConsultationDiagnosis($payload['context']);
 
-        if (blank($result)) {
-            $this->aiError = 'L\'analyse n\'a pas pu être générée. Vérifiez la configuration de l\'API Gemini ou réessayez.';
+        if (blank($result['text'])) {
+            $this->aiError = $result['user_error'];
         } else {
-            $this->aiAnalysis = trim($result);
+            $this->aiAnalysis = trim($result['text']);
         }
 
         $this->aiAnalyzing = false;
@@ -882,7 +929,18 @@ new #[Title('Fiche de consultation')] class extends Component {
 
     public function infoRows(): array
     {
-        return [['label' => 'Reference', 'value' => $this->consultation->reference], ['label' => 'Type', 'value' => $this->consultation->type === 'consultation' ? 'Visite' : 'Examen'], ['label' => 'Fiche', 'value' => ucfirst((string) $this->consultation->type_visite)], ['label' => 'Periode', 'value' => $this->consultation->mois ?: '-'], ['label' => 'Departement', 'value' => $this->consultation->departement?->name ?: '-'], ['label' => 'Service', 'value' => $this->consultation->service?->name ?: '-'], ['label' => 'Medecin', 'value' => $this->consultation->user?->name ?: 'Non assigne'], ['label' => 'Projet', 'value' => $this->consultation->projet?->name ?: '-'], ['label' => 'Prise en charge', 'value' => $this->consultation->assurance?->name ?: 'Paiement direct'], ['label' => 'Date creation', 'value' => optional($this->consultation->created_at)->format('d/m/Y H:i') ?: '-']];
+        $priseEnCharge = $this->consultation->projet?->name
+            ?: ($this->consultation->effectiveAssurance()?->name ?: 'Paiement direct');
+
+        if ($this->consultation->effectiveAssurance() && $this->consultation->coverageRate() > 0) {
+            $priseEnCharge .= sprintf(
+                ' (%s — %s%%)',
+                $this->consultation->coverageCategoryName(),
+                number_format($this->consultation->coverageRate(), 0, ',', ' ')
+            );
+        }
+
+        return [['label' => 'Reference', 'value' => $this->consultation->reference], ['label' => 'Type', 'value' => $this->consultation->type === 'consultation' ? 'Visite' : 'Examen'], ['label' => 'Fiche', 'value' => ucfirst((string) $this->consultation->type_visite)], ['label' => 'Periode', 'value' => $this->consultation->mois ?: '-'], ['label' => 'Departement', 'value' => $this->consultation->departement?->name ?: '-'], ['label' => 'Service', 'value' => $this->consultation->service?->name ?: '-'], ['label' => 'Medecin', 'value' => $this->consultation->user?->name ?: 'Non assigne'], ['label' => 'Projet', 'value' => $this->consultation->projet?->name ?: '-'], ['label' => 'Prise en charge', 'value' => $priseEnCharge], ['label' => 'Date creation', 'value' => optional($this->consultation->created_at)->format('d/m/Y H:i') ?: '-']];
     }
 
     public function vitalRows(): array
@@ -1026,8 +1084,7 @@ new #[Title('Fiche de consultation')] class extends Component {
             ->value('id');
     }
 
-    public function imagerieActeImages(int $acteId): Collection
-    {
+    public function imagerieActeImages(int $acteId): Collection {
         $pivotId = $this->imagerieActePivotId($acteId);
 
         if (! $pivotId) {
@@ -1047,8 +1104,7 @@ new #[Title('Fiche de consultation')] class extends Component {
         );
     }
 
-    public function imagerieImagesByActe(): Collection
-    {
+    public function imagerieImagesByActe(): Collection {
         return $this->imagerieActes()
             ->map(fn ($acte) => (object) [
                 'acte_id' => (int) $acte->id,
@@ -1069,8 +1125,7 @@ new #[Title('Fiche de consultation')] class extends Component {
         return Departement::query()->where('name', 'like', '%imagerie%')->orWhere('ref', 'img')->first();
     }
 
-    protected function syncSectionActes(string $section, array $selectedIds): void
-    {
+    protected function syncSectionActes(string $section, array $selectedIds): void {
         $selectedIds = collect($selectedIds)->map(fn($id) => (int) $id)->unique()->values()->all();
 
         if ($section === 'laboratoire') {
@@ -1196,7 +1251,7 @@ new #[Title('Fiche de consultation')] class extends Component {
                                     <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Signes vitaux
                                     </h3>
                                 </div>
-                                <x-button wire:click="openEditor('vitals')"
+                                <x-button wire:click="openEditor('vitals')" sm
                                     x-on:click="$tsui.open.modal('consultation-section-modal')" icon="pencil-square">
                                     Mettre a jour
                                 </x-button>
@@ -1233,7 +1288,95 @@ new #[Title('Fiche de consultation')] class extends Component {
                         </div>
                     </section>
 
-                    {{-- Examen clinique structuré --}}
+                    {{-- 1. Symptomes (edition inline) --}}
+                    <section
+                        class="rounded-md border border-rose-200 bg-white shadow-sm dark:border-rose-500/25 dark:bg-slate-950/70">
+                        <div
+                            class="border-b border-rose-100 bg-linear-to-r from-rose-50 to-white px-5 py-4 dark:border-rose-500/20 dark:from-rose-950/40 dark:to-slate-950/70">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-rose-600 dark:text-rose-300">
+                                        Anamnese
+                                    </p>
+                                    <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Symptomes</h3>
+                                </div>
+                                <span
+                                    class="rounded-full px-3 py-1 text-xs font-bold {{ $this->hasSymptomes() ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">
+                                    {{ $this->consultation->symptomeItems->count() }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4 px-5 py-5">
+                            @unless ($consultation->is_clore)
+                                <x-select.styled label="Selectionner les symptomes"
+                                    wire:model.live.debounce.500ms="symptome_ids" :request="route('api.symptomes')"
+                                    select="label:name|value:id" multiple searchable
+                                    hint="Enregistrement automatique a chaque modification" />
+                                @error('symptome_ids')
+                                    <p class="mt-2 text-sm font-medium text-rose-600">{{ $message }}</p>
+                                @enderror
+                                @error('symptome_ids.*')
+                                    <p class="mt-2 text-sm font-medium text-rose-600">{{ $message }}</p>
+                                @enderror
+                            @endunless
+
+                            <div wire:loading.class="opacity-60" wire:target="symptome_ids"
+                                class="flex flex-wrap gap-2 transition-opacity">
+                                @forelse ($this->consultation->symptomeItems as $symptome)
+                                    <span wire:key="symptome-{{ $symptome->id }}"
+                                        class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">
+                                        {{ $symptome->name }}
+                                    </span>
+                                @empty
+                                    <p class="text-sm italic text-slate-500 dark:text-slate-400">
+                                        Aucun symptome enregistre.
+                                    </p>
+                                @endforelse
+                            </div>
+
+                            <p wire:loading wire:target="symptome_ids"
+                                class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                Enregistrement en cours...
+                            </p>
+                        </div>
+                    </section>
+
+                    {{-- 2. Complement d'anamnese --}}
+                    <section
+                        class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                        <div
+                            class="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="h-2.5 w-2.5 rounded-full {{ $this->sectionHasContent($this->narrativeSection('complement_anamnese')) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600' }}"></span>
+                                    <h3 class="text-lg font-black text-slate-900 dark:text-white">
+                                        {{ $this->narrativeSection('complement_anamnese')['title'] }}
+                                    </h3>
+                                </div>
+                                @unless ($consultation->is_clore)
+                                    <x-button wire:click="openEditor('complement_anamnese')" sm
+                                        x-on:click="$tsui.open.modal('consultation-section-modal')" icon="pencil-square">
+                                        {{ $this->sectionHasContent($this->narrativeSection('complement_anamnese')) ? 'Editer' : 'Ajouter' }}
+                                    </x-button>
+                                @endunless
+                            </div>
+                        </div>
+                        <div class="px-5 py-5">
+                            @if (blank($this->narrativeSection('complement_anamnese')['preview']))
+                                <p class="text-sm italic text-slate-500 dark:text-slate-400">
+                                    Aucune information enregistree.
+                                </p>
+                            @else
+                                <p class="whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                                    {{ $this->narrativeSection('complement_anamnese')['preview'] }}
+                                </p>
+                            @endif
+                        </div>
+                    </section>
+
+                    {{-- 3. Examen clinique structure --}}
                     <section
                         class="rounded-md border border-teal-200 bg-white shadow-sm dark:border-teal-500/25 dark:bg-slate-950/70">
                         <div
@@ -1250,9 +1393,9 @@ new #[Title('Fiche de consultation')] class extends Component {
                                         Complétion : {{ $this->clinicalExamProgress['answered'] }}/{{ $this->clinicalExamProgress['total'] }} ({{ $this->clinicalExamProgress['percent'] }}%)
                                     </p>
                                 </div>
-                                <x-button wire:click="openClinicalExamEditor"
+                                <x-button wire:click="openClinicalExamEditor" sm
                                     x-on:click="$tsui.open.modal('clinical-exam-modal')" icon="pencil-square">
-                                    {{ $this->hasClinicalExamData() ? 'Modifier' : 'Renseigner' }}
+                                    {{ $this->hasClinicalExamData() ? 'Editer' : 'Renseigner' }}
                                 </x-button>
                             </div>
                         </div>
@@ -1303,101 +1446,218 @@ new #[Title('Fiche de consultation')] class extends Component {
                         </div>
                     </section>
 
-                    {{-- Renseignement sur le patient --}}
+                    {{-- 4. Diagnostic de presomption --}}
                     <section
                         class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
                         <div
-                            class="rounded-md rounded-t border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">
-                                        Narratif
-                                        clinique</p>
-                                    <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Sections
-                                        medicales
+                            class="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="h-2.5 w-2.5 rounded-full {{ $this->sectionHasContent($this->narrativeSection('diagnostic_presomption')) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600' }}"></span>
+                                    <h3 class="text-lg font-black text-slate-900 dark:text-white">
+                                        {{ $this->narrativeSection('diagnostic_presomption')['title'] }}
                                     </h3>
                                 </div>
+                                @unless ($consultation->is_clore)
+                                    <x-button wire:click="openEditor('diagnostic_presomption')" sm
+                                        x-on:click="$tsui.open.modal('consultation-section-modal')" icon="pencil-square">
+                                        {{ $this->sectionHasContent($this->narrativeSection('diagnostic_presomption')) ? 'Editer' : 'Ajouter' }}
+                                    </x-button>
+                                @endunless
+                            </div>
+                        </div>
+                        <div class="px-5 py-5">
+                            @if (blank($this->narrativeSection('diagnostic_presomption')['preview']))
+                                <p class="text-sm italic text-slate-500 dark:text-slate-400">
+                                    Aucune information enregistree.
+                                </p>
+                            @else
+                                <p class="whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                                    {{ $this->narrativeSection('diagnostic_presomption')['preview'] }}
+                                </p>
+                            @endif
+                        </div>
+                    </section>
+
+                    {{-- 5. Diagnostic de certitude --}}
+                    <section
+                        class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                        <div
+                            class="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="h-2.5 w-2.5 rounded-full {{ $this->sectionHasContent($this->narrativeSection('diagnostic_certitude')) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600' }}"></span>
+                                    <h3 class="text-lg font-black text-slate-900 dark:text-white">
+                                        {{ $this->narrativeSection('diagnostic_certitude')['title'] }}
+                                    </h3>
+                                </div>
+                                @unless ($consultation->is_clore)
+                                    <x-button wire:click="openEditor('diagnostic_certitude')" sm
+                                        x-on:click="$tsui.open.modal('consultation-section-modal')" icon="pencil-square">
+                                        {{ $this->sectionHasContent($this->narrativeSection('diagnostic_certitude')) ? 'Editer' : 'Ajouter' }}
+                                    </x-button>
+                                @endunless
+                            </div>
+                        </div>
+                        <div class="px-5 py-5">
+                            @if (blank($this->narrativeSection('diagnostic_certitude')['preview']))
+                                <p class="text-sm italic text-slate-500 dark:text-slate-400">
+                                    Aucune information enregistree.
+                                </p>
+                            @else
+                                <p class="whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                                    {{ $this->narrativeSection('diagnostic_certitude')['preview'] }}
+                                </p>
+                            @endif
+                        </div>
+                    </section>
+
+                    <section
+                        class="rounded-md border border-violet-200 bg-linear-to-r from-violet-50/80 to-indigo-50/50 shadow-sm dark:border-violet-500/20 dark:from-violet-950/30 dark:to-indigo-950/20">
+                        <div class="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">
+                                    Aide a la decision
+                                </p>
+                                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                                    Orientation diagnostique basee sur les elements cliniques saisis (ne remplace pas le jugement medical).
+                                </p>
+                            </div>
+                            <flux:button
+                                variant="primary"
+                                icon="sparkles"
+                                wire:click="runDiagnosisAnalysis"
+                                wire:loading.attr="disabled"
+                                wire:target="runDiagnosisAnalysis"
+                                class="shrink-0"
+                            >
+                                <span wire:loading.remove wire:target="runDiagnosisAnalysis">Aide au diagnostic</span>
+                                <span wire:loading wire:target="runDiagnosisAnalysis">Analyse en cours…</span>
+                            </flux:button>
+                        </div>
+                    </section>
+
+                    @include('pages.consultation.partials.show-laboratoire')
+
+                    @include('pages.consultation.partials.show-imagerie')
+
+                    {{-- 8. Prescription medicale --}}
+                    <section
+                        class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                        <div
+                            class="rounded-md border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Cure
+                                        et traitement</p>
+                                    <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Prescription
+                                        medicale</h3>
+                                </div>
+                                @unless ($consultation->is_clore)
+                                    <x-button wire:click="openEditor('prescription')" sm
+                                        x-on:click="$tsui.open.modal('consultation-section-modal')" icon="document-plus">
+                                        Prescrire
+                                    </x-button>
+                                @endunless
                             </div>
                         </div>
 
-                        <div class="divide-y divide-slate-200 dark:divide-slate-800">
-                            @foreach ($this->narrativeSections() as $section)
-                                <div class="px-5 py-5">
-                                    <div>
-                                        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                            <div class="flex items-center gap-3">
-                                                <span
-                                                    class="h-2.5 w-2.5 rounded-full {{ $this->sectionHasContent($section) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600' }}"></span>
-                                                <h4
-                                                    class="text-sm font-black uppercase tracking-[0.18em] text-slate-700 dark:text-slate-200">
-                                                    {{ $section['title'] }}
-                                                </h4>
-                                            </div>
-                                            <div>
-                                                <x-button wire:click="openEditor('{{ $section['key'] }}')" sm
-                                                    x-on:click="$tsui.open.modal('consultation-section-modal')"
-                                                    icon="pencil-square">
-                                                    {{ $this->sectionHasContent($section) ? 'Editer' : 'Ajouter' }}
-                                                </x-button>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            @if ($section['key'] === 'symptomes')
-                                                @if ($this->hasSymptomes())
-                                                    <div class="flex flex-wrap gap-2">
-                                                        @foreach ($this->consultation->symptomeItems as $symptome)
-                                                            <span wire:key="symptome-{{ $symptome->id }}"
-                                                                class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">
-                                                                {{ $symptome->name }}
-                                                            </span>
-                                                        @endforeach
-                                                    </div>
-                                                @else
-                                                    <i class="text-gray-500 text-sm">
-                                                        Aucun symptome enregistre.
-                                                    </i>
-                                                @endif
-                                            @elseif (blank($section['preview']))
-                                                <i class="text-gray-500 text-sm">
-                                                    Aucune information enregistrée.
-                                                </i>
-                                            @else
-                                                {{ $section['preview'] }}
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
+                        <div class="space-y-4 px-5 py-5">
+                            <div
+                                class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                                <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Note medicale</p>
+                                <p class="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">
+                                    {{ $this->consultation->prescription_medicale ?: 'Aucune note de prescription enregistree.' }}
+                                </p>
+                            </div>
 
-                        <div class="border-t border-violet-100 bg-linear-to-r from-violet-50/80 to-indigo-50/50 px-5 py-5 dark:border-violet-500/20 dark:from-violet-950/30 dark:to-indigo-950/20">
-                            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">
-                                        Aide à la décision
+                            <div>
+                                <div class="mb-3 flex items-center justify-between">
+                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Medicaments prescrits
                                     </p>
-                                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                                        Orientation diagnostique basée sur les éléments cliniques saisis (ne remplace pas le jugement médical).
-                                    </p>
+                                    <span
+                                        class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                        {{ $this->prescriptionItems()->count() }}
+                                    </span>
                                 </div>
-                                <flux:button
-                                    variant="primary"
-                                    icon="sparkles"
-                                    wire:click="runDiagnosisAnalysis"
-                                    wire:loading.attr="disabled"
-                                    wire:target="runDiagnosisAnalysis"
-                                    class="shrink-0"
-                                >
-                                    <span wire:loading.remove wire:target="runDiagnosisAnalysis">Aide au diagnostic</span>
-                                    <span wire:loading wire:target="runDiagnosisAnalysis">Analyse en cours…</span>
-                                </flux:button>
+                                <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+                                    <table class="min-w-full border-collapse bg-white text-sm dark:bg-slate-950/40">
+                                        <thead class="bg-slate-50 dark:bg-slate-900/70">
+                                            <tr
+                                                class="text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                                <th class="px-4 py-3">Medicament</th>
+                                                <th class="px-4 py-3 text-center">Qte</th>
+                                                <th class="px-4 py-3 text-center">Servie</th>
+                                                <th class="px-4 py-3">Posologie</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                                            @forelse($this->prescriptionItems() as $item)
+                                                <tr>
+                                                    <td class="px-4 py-3">
+                                                        <p class="font-semibold text-slate-900 dark:text-white">
+                                                            {{ $item->name }}</p>
+                                                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                                                            {{ $item->reference }}</p>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center">{{ (int) $item->pivot->nbr }}</td>
+                                                    <td class="px-4 py-3 text-center">{{ (int) $item->pivot->qte_servie }}
+                                                    </td>
+                                                    <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+                                                        {{ $item->pivot->posologie ?: '-' }}</td>
+                                                </tr>
+                                            @empty
+                                                <tr>
+                                                    <td colspan="4"
+                                                        class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                                        Aucune ligne de prescription pour cette consultation.
+                                                    </td>
+                                                </tr>
+                                            @endforelse
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </section>
 
-                    @php
-                        $rendezVousList = $this->programmedRendezVousList();
-                    @endphp
+                    {{-- 9. Plan et conduite a tenir --}}
+                    <section
+                        class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                        <div
+                            class="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="h-2.5 w-2.5 rounded-full {{ $this->sectionHasContent($this->narrativeSection('plan_traitement_conduite')) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600' }}"></span>
+                                    <h3 class="text-lg font-black text-slate-900 dark:text-white">
+                                        {{ $this->narrativeSection('plan_traitement_conduite')['title'] }}
+                                    </h3>
+                                </div>
+                                @unless ($consultation->is_clore)
+                                    <x-button wire:click="openEditor('plan_traitement_conduite')" sm
+                                        x-on:click="$tsui.open.modal('consultation-section-modal')" icon="pencil-square">
+                                        {{ $this->sectionHasContent($this->narrativeSection('plan_traitement_conduite')) ? 'Editer' : 'Ajouter' }}
+                                    </x-button>
+                                @endunless
+                            </div>
+                        </div>
+                        <div class="px-5 py-5">
+                            @if (blank($this->narrativeSection('plan_traitement_conduite')['preview']))
+                                <p class="text-sm italic text-slate-500 dark:text-slate-400">
+                                    Aucune information enregistree.
+                                </p>
+                            @else
+                                <p class="whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                                    {{ $this->narrativeSection('plan_traitement_conduite')['preview'] }}
+                                </p>
+                            @endif
+                        </div>
+                    </section>
+
+                    {{-- 10. Rendez-vous medical --}}
                     <section
                         class="overflow-hidden rounded-md border border-violet-200 bg-white shadow-sm dark:border-violet-500/25 dark:bg-slate-950/70">
                         <div
@@ -1439,7 +1699,7 @@ new #[Title('Fiche de consultation')] class extends Component {
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span
                                         class="rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-800 dark:bg-violet-500/15 dark:text-violet-300">
-                                        {{ $rendezVousList->count() }}
+                                        {{ $this->programmedRendezVousList()->count() }}
                                     </span>
                                     <x-button wire:click="openRendezVousModal" sm icon="plus"
                                         x-on:click="$tsui.open.modal('rendez-vous-modal')">
@@ -1450,7 +1710,7 @@ new #[Title('Fiche de consultation')] class extends Component {
                         </div>
 
                         <div class="space-y-4 px-5 py-5">
-                            @forelse ($rendezVousList as $rdv)
+                            @forelse ($this->programmedRendezVousList() as $rdv)
                                 @php
                                     $rdvStatus = $this->rendezVousStatus($rdv);
                                 @endphp
@@ -1552,429 +1812,13 @@ new #[Title('Fiche de consultation')] class extends Component {
                             @endforelse
                         </div>
                     </section>
+                @else
+                    @include('pages.consultation.partials.show-laboratoire')
+
+                    @include('pages.consultation.partials.show-imagerie')
                 @endif
 
-
-                {{-- examen de laboratoire --}}
-                <section
-                    class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-                    <div
-                        class="rounded-md border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                        <div class="flex items-center justify-between gap-3">
-                            <div>
-                                <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Demandes
-                                </p>
-                                <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Laboratoire</h3>
-                            </div>
-                            <x-button wire:click="openEditor('laboratoire')"
-                                x-on:click="$tsui.open.modal('consultation-section-modal')" icon="beaker">
-                                Demandé examen
-                            </x-button>
-                        </div>
-                    </div>
-
-                    <div class="space-y-4 px-5 py-5">
-                        <div
-                            class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Renseignement</p>
-                            <p class="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">
-                                {{ $this->consultation->laboratoire?->renseignement ?: 'Aucun renseignement de laboratoire saisi.' }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <div class="mb-3 flex items-center justify-between">
-                                <p class="text-sm font-semibold text-slate-900 dark:text-white">Examens demandés</p>
-                                <span
-                                    class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                    {{ $this->laboratoireActes()->count() }}
-                                </span>
-                            </div>
-                            <div class="overflow-hidden border border-gray-200 rounded-lg shadow-sm">
-                                <table class="min-w-full divide-y divide-gray-200 bg-white text-sm">
-                                    <!-- En-tête d'actions -->
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th colspan="5" class="px-4 py-3 text-right">
-                                                <a href="#"
-                                                    class="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 font-semibold transition-colors">
-                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor"
-                                                        viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2"
-                                                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z">
-                                                        </path>
-                                                    </svg>
-                                                    Imprimer le Bon de laboratoire
-                                                </a>
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <!-- En-tête des colonnes -->
-                                    <thead class="bg-gray-100">
-                                        <tr>
-                                            <th
-                                                class="px-4 py-3 font-semibold text-gray-700 border-b border-r border-gray-200 text-left">
-                                                #</th>
-                                            <th
-                                                class="px-4 py-3 font-semibold text-gray-700 border-b border-r border-gray-200 text-left">
-                                                Examens</th>
-                                            <th
-                                                class="px-4 py-3 font-semibold text-center text-gray-700 border-b border-r border-gray-200">
-                                                Résultat</th>
-                                            <th
-                                                class="px-4 py-3 font-semibold text-gray-700 border-b border-r border-gray-200 text-center">
-                                                Valeur normale</th>
-                                            <th
-                                                class="px-4 py-3 font-semibold text-gray-700 border-b border-r border-gray-200 text-right">
-                                                Actions</th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody class="divide-y divide-gray-200">
-                                        @forelse ($this->laboratoireActes() as $acte)
-                                            <tr class="hover:bg-gray-50 transition-colors">
-                                                <td class="px-4 text-xs py-3 text-gray-500 border-r border-gray-200">
-                                                    {{ $loop->iteration }}</td>
-                                                <td
-                                                    class="px-4 py-3 text-xs font-medium text-gray-900 border-r border-gray-200">
-                                                    {{ $acte->name }}</td>
-                                                <td class="px-4 text-xs py-3 border-r text-center border-gray-200">
-                                                    @if ($acte->pivot->resultat && $acte->pivot->valide)
-                                                        <span
-                                                            class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">
-                                                            {{ $acte->pivot->resultat }}
-                                                        </span>
-                                                    @else
-                                                        <span class="italic text-gray-400">En attente</span>
-                                                    @endif
-                                                </td>
-                                                <td
-                                                    class="px-4 py-3 text-xs text-center text-gray-600 border-r border-gray-200">
-                                                    <span
-                                                        class="font-mono text-xs">{{ $acte->valeur_normale ?? '[-]' }}</span>
-                                                </td>
-                                                <td
-                                                    class="px-4 py-3 text-xs flex gap-2 justify-end border-r border-gray-200">
-                                                    <flux:button size="xs" variant="primary" color="indigo"
-                                                        wire:click="openLaboratoireActeNoteModal({{ $acte->id }})"
-                                                        :icon="$acte->pivot->valide ? 'lock-closed' : 'pencil-square'"
-                                                        :disabled="$acte->pivot->valide">
-                                                        Note
-                                                    </flux:button>
-                                                    <flux:button size="xs" variant="danger"
-                                                        wire:click="confirmDeleteLaboratoireActe({{ $acte->id }})"
-                                                        :icon="$acte->pivot->valide ? 'lock-closed' : 'trash'"
-                                                        :disabled="$acte->pivot->valide">
-                                                        Supprimer
-                                                    </flux:button>
-                                                </td>
-                                            </tr>
-                                        @empty
-                                            <tr>
-                                                <td colspan="6"
-                                                    class="px-4 py-8 text-center text-gray-400 italic bg-gray-50">
-                                                    Aucun examen demandé.
-                                                </td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        @if ($this->consultation->laboratoire)
-                            <div>
-                                <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Photos du bon de
-                                        laboratoire</p>
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                            {{ $this->laboratoireImages()->count() }}
-                                        </span>
-                                        <a href="{{ route('laboratoire.show', $this->consultation->laboratoire->id) }}"
-                                            wire:navigate
-                                            class="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">
-                                            <flux:icon.photo class="size-4" />
-                                            Gerer les photos
-                                        </a>
-                                    </div>
-                                </div>
-
-                                @if ($this->laboratoireImages()->isNotEmpty())
-                                    <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-                                        @foreach ($this->laboratoireImages() as $image)
-                                            <div wire:key="labo-photo-{{ $image->id }}"
-                                                class="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
-                                                <a href="{{ $image->url() }}" target="_blank" rel="noopener">
-                                                    <img src="{{ $image->url() }}" alt="{{ $image->name }}"
-                                                        class="aspect-square w-full object-cover transition group-hover:scale-[1.02]" />
-                                                </a>
-                                                <div class="space-y-1 p-3">
-                                                    <p class="truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
-                                                        title="{{ $image->name }}">
-                                                        {{ $image->name }}
-                                                    </p>
-                                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                                        {{ $image->created_at?->format('d/m/Y H:i') }}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                @else
-                                    <p
-                                        class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                                        Aucune photo soumise pour ce bon de laboratoire.
-                                    </p>
-                                @endif
-                            </div>
-                        @endif
-                    </div>
-                </section>
-
-                {{-- Examin d'imagerie --}}
-                <section
-                    class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-                    <div
-                        class="rounded-md border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                        <div class="flex items-center justify-between gap-3">
-                            <div>
-                                <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Demandes
-                                </p>
-                                <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Imagerie</h3>
-                            </div>
-                            <x-button wire:click="openEditor('imagerie')"
-                                x-on:click="$tsui.open.modal('consultation-section-modal')" icon="photo">
-                                Demander / modifier
-                            </x-button>
-                        </div>
-                    </div>
-
-                    <div class="space-y-4 px-5 py-5">
-                        <div
-                            class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Renseignement</p>
-                            <p class="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">
-                                {{ $this->consultation->imagerie?->renseignement ?: 'Aucun renseignement d imagerie saisi.' }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <div class="mb-3 flex items-center justify-between">
-                                <p class="text-sm font-semibold text-slate-900 dark:text-white">Examens demandes</p>
-                                <span
-                                    class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                    {{ $this->imagerieActes()->count() }}
-                                </span>
-                            </div>
-                            <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-                                <table class="min-w-full border-collapse bg-white text-sm dark:bg-slate-950/40">
-                                    <thead class="bg-slate-50 dark:bg-slate-900/70">
-                                        <tr
-                                            class="text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                                            <th class="px-4 py-3">Examen</th>
-                                            <th class="px-4 py-3">Service</th>
-                                            <th class="px-4 py-3 text-center">Images</th>
-                                            <th class="px-4 py-3 text-center">Etat</th>
-                                            <th class="px-4 py-3 text-right">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-                                        @forelse ($this->imagerieActes() as $acte)
-                                            @php
-                                                $isDocumented =
-                                                    filled($acte->pivot->clinique ?? null) ||
-                                                    filled($acte->pivot->protocole ?? null) ||
-                                                    filled($acte->pivot->cloture ?? null);
-                                            @endphp
-                                            <tr
-                                                class="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
-                                                <td class="px-4 py-3">
-                                                    <div>
-                                                        <p class="font-semibold text-slate-900 dark:text-white">
-                                                            {{ $acte->name }}</p>
-                                                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                                            {{ $this->consultation->reference }}
-                                                        </p>
-                                                    </div>
-                                                </td>
-                                                <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
-                                                    {{ $acte->service?->name ?: ($acte->departement?->name ?: 'Imagerie') }}
-                                                </td>
-                                                <td class="px-4 py-3 text-center">
-                                                    <span
-                                                        class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                                        {{ $this->imagerieActeImages((int) $acte->id)->count() }}
-                                                    </span>
-                                                </td>
-                                                <td class="px-4 py-3 text-center">
-                                                    <span
-                                                        class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold {{ $isDocumented ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' }}">
-                                                        {{ $isDocumented ? 'Renseigne' : 'A completer' }}
-                                                    </span>
-                                                </td>
-                                                <td class="px-4 py-3 text-right">
-                                                    <a href="{{ route('imagerie.show', ['id' => $this->consultation->id, 'acte' => $acte->id]) }}"
-                                                        wire:navigate
-                                                        class="inline-flex items-center gap-2 rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-3 py-1.5 text-xs font-bold text-fuchsia-700 transition hover:border-fuchsia-300 hover:bg-fuchsia-100 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10 dark:text-fuchsia-300">
-                                                        {{ $isDocumented ? 'Ouvrir le compte rendu' : 'Renseigner cet examen' }}
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        @empty
-                                            <tr>
-                                                <td colspan="5"
-                                                    class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-                                                    Aucun examen d imagerie demande pour cette consultation.
-                                                </td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        @if ($this->imagerieActes()->isNotEmpty())
-                            <div>
-                                <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Images d imagerie
-                                    </p>
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                            {{ $this->imagerieImagesTotal() }}
-                                        </span>
-                                        <a href="{{ route('imagerie.show', $this->consultation->id) }}" wire:navigate
-                                            class="inline-flex items-center gap-1 rounded-lg bg-fuchsia-50 px-3 py-1.5 text-xs font-semibold text-fuchsia-700 transition hover:bg-fuchsia-100 dark:bg-fuchsia-500/10 dark:text-fuchsia-300 dark:hover:bg-fuchsia-500/20">
-                                            <flux:icon.photo class="size-4" />
-                                            Gerer les images
-                                        </a>
-                                    </div>
-                                </div>
-
-                                @if ($this->imagerieImagesByActe()->isNotEmpty())
-                                    <div class="space-y-6">
-                                        @foreach ($this->imagerieImagesByActe() as $group)
-                                            <div wire:key="imagerie-group-{{ $group->acte_id }}">
-                                                <p
-                                                    class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-fuchsia-600 dark:text-fuchsia-300">
-                                                    {{ $group->acte_name }}
-                                                    <span class="text-slate-400">({{ $group->images->count() }})</span>
-                                                </p>
-                                                <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-                                                    @foreach ($group->images as $image)
-                                                        <div wire:key="imagerie-photo-{{ $image->id }}"
-                                                            class="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
-                                                            <a href="{{ $image->url() }}" target="_blank"
-                                                                rel="noopener">
-                                                                <img src="{{ $image->url() }}"
-                                                                    alt="{{ $image->name }}"
-                                                                    class="aspect-square w-full object-cover transition group-hover:scale-[1.02]" />
-                                                            </a>
-                                                            <div class="space-y-1 p-3">
-                                                                <p class="truncate text-xs font-semibold text-slate-800 dark:text-slate-200"
-                                                                    title="{{ $image->name }}">
-                                                                    {{ $image->name }}
-                                                                </p>
-                                                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                                                    {{ $image->created_at?->format('d/m/Y H:i') }}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                @else
-                                    <p
-                                        class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                                        Aucune image soumise pour les examens d imagerie.
-                                    </p>
-                                @endif
-                            </div>
-                        @endif
-                    </div>
-                </section>
-
-                @if ($this->consultation->type == 'consultation')
-                    {{-- prescription medicale --}}
-                    <section
-                        class="rounded-md border border-slate-300 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-                        <div
-                            class="rounded-md border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Cure
-                                        et
-                                        traitement
-                                    </p>
-                                    <h3 class="mt-1 text-lg font-black text-slate-900 dark:text-white">Préscription
-                                        médicale
-                                    </h3>
-                                </div>
-                                <x-button wire:click="openEditor('prescription')"
-                                    x-on:click="$tsui.open.modal('consultation-section-modal')" icon="document-plus">
-                                    Demander prescription
-                                </x-button>
-                            </div>
-                        </div>
-
-                        <div class="space-y-4 px-5 py-5">
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                                <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Note medicale</p>
-                                <p class="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">
-                                    {{ $this->consultation->prescription_medicale ?: 'Aucune note de prescription enregistree.' }}
-                                </p>
-                            </div>
-
-                            <div>
-                                <div class="mb-3 flex items-center justify-between">
-                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">Medicaments prescrits</p>
-                                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                        {{ $this->prescriptionItems()->count() }}
-                                    </span>
-                                </div>
-                                <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-                                    <table class="min-w-full border-collapse bg-white text-sm dark:bg-slate-950/40">
-                                        <thead class="bg-slate-50 dark:bg-slate-900/70">
-                                            <tr class="text-left text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                                                <th class="px-4 py-3">Medicament</th>
-                                                <th class="px-4 py-3 text-center">Qte</th>
-                                                <th class="px-4 py-3 text-center">Servie</th>
-                                                <th class="px-4 py-3">Posologie</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-                                            @forelse($this->prescriptionItems() as $item)
-                                                <tr>
-                                                    <td class="px-4 py-3">
-                                                        <p class="font-semibold text-slate-900 dark:text-white">{{ $item->name }}</p>
-                                                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ $item->reference }}</p>
-                                                    </td>
-                                                    <td class="px-4 py-3 text-center">{{ (int) $item->pivot->nbr }}</td>
-                                                    <td class="px-4 py-3 text-center">{{ (int) $item->pivot->qte_servie }}</td>
-                                                    <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ $item->pivot->posologie ?: '-' }}</td>
-                                                </tr>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-                                                        Aucune ligne de prescription pour cette consultation.
-                                                    </td>
-                                                </tr>
-                                            @endforelse
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                @endif
-
-                {{-- issue de la consultation --}}
+                {{-- 11. Issue de la consultation --}}
                 <section @class([
                     'overflow-hidden rounded-md border bg-white shadow-sm dark:bg-slate-950/70',
                     'border-emerald-200 dark:border-emerald-500/25' => $consultation->is_clore,
@@ -2101,14 +1945,7 @@ new #[Title('Fiche de consultation')] class extends Component {
         </div>
     </div>
 
-    <x-modal id="consultation-section-modal" :title="collect($this->narrativeSections())->firstWhere('key', $currentSection)['title'] ??
-        match ($currentSection) {
-            'vitals' => 'Signes vitaux',
-            'symptomes' => 'Symptomes',
-            'laboratoire' => 'Demande laboratoire',
-            'imagerie' => 'Demande imagerie',
-            default => 'Edition de la consultation',
-        }" size="6xl" center z-index="z-20" persistent
+    <x-modal id="consultation-section-modal" :title="$this->narrativeSectionTitle($currentSection)" size="6xl" center z-index="z-20" persistent
         x-on:consultation-section-saved.window="$tsui.close.modal('consultation-section-modal')">
         <div class="space-y-5">
             <div
@@ -2122,17 +1959,6 @@ new #[Title('Fiche de consultation')] class extends Component {
             <div wire:loading.remove wire:target="openEditor">
                 @if (in_array($currentSection, array_keys($this->sectionFieldMap()), true))
                     <x-textarea wire:model="textValue" label="Contenu" rows="10" maxlength="5000" count />
-                @endif
-
-                @if ($currentSection === 'symptomes')
-                    <x-select.styled label="Symptomes" wire:model="symptome_ids" :request="route('api.symptomes')"
-                        select="label:name|value:id" multiple hint="Selectionnez un ou plusieurs symptomes" />
-                    @error('symptome_ids')
-                        <p class="mt-2 text-sm font-medium text-rose-600">{{ $message }}</p>
-                    @enderror
-                    @error('symptome_ids.*')
-                        <p class="mt-2 text-sm font-medium text-rose-600">{{ $message }}</p>
-                    @enderror
                 @endif
 
                 @if ($currentSection === 'vitals')
@@ -2197,12 +2023,11 @@ new #[Title('Fiche de consultation')] class extends Component {
                                 @if ($this->selectedLaboratoireActesPreview()->isNotEmpty())
                                     <div class="grid gap-3 md:grid-cols-2">
                                         @foreach ($this->selectedLaboratoireActesPreview() as $acte)
-                                            @php($isValidated = $this->isLaboratoireActeIdValidated($acte->id))
                                             <div wire:key="laboratoire-acte-preview-{{ $acte->id }}"
                                                 @class([
                                                     'rounded-2xl border px-4 py-3',
-                                                    'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20' => $isValidated,
-                                                    'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900' => ! $isValidated,
+                                                    'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20' => $this->isLaboratoireActeIdValidated($acte->id),
+                                                    'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900' => ! $this->isLaboratoireActeIdValidated($acte->id),
                                                 ])>
                                                 <div class="flex items-start justify-between gap-3">
                                                     <div class="min-w-0">
@@ -2213,7 +2038,7 @@ new #[Title('Fiche de consultation')] class extends Component {
                                                         </p>
                                                     </div>
                                                     <div class="flex shrink-0 flex-col items-end gap-1">
-                                                        @if ($isValidated)
+                                                        @if ($this->isLaboratoireActeIdValidated($acte->id))
                                                             <span
                                                                 class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
                                                                 Validé
@@ -2494,10 +2319,9 @@ new #[Title('Fiche de consultation')] class extends Component {
         </x-slot:footer>
     </x-modal>
 
-    <x-modal id="clinical-exam-modal" title="Examen clinique" size="4xl" center persistent
-        x-on:clinical-exam-modal-open.window="$tsui.open.modal('clinical-exam-modal')"
+    <x-modal id="clinical-exam-modal" title="Examen clinique" size="4xl" center persistent scrollable
         x-on:clinical-exam-saved.window="$tsui.close.modal('clinical-exam-modal')">
-        <div class="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+        <div class="space-y-6">
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Date de l'examen</label>

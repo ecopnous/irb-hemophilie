@@ -47,6 +47,11 @@ class Assurance extends Model
         return $this->hasMany(Consultation::class);
     }
 
+    public function projetConsultations(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    {
+        return $this->hasManyThrough(Consultation::class, Projet::class, 'assurance_id', 'projet_id');
+    }
+
     public function logoUrl(): ?string
     {
         if (! $this->logo) {

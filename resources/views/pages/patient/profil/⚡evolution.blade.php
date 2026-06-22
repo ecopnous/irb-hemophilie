@@ -59,10 +59,10 @@ new #[Title('Évolution du patient'), Layout('layouts::app.other.profil_medical'
 
         $result = app(GeminiService::class)->analyzePatientEvolution($context);
 
-        if (blank($result)) {
-            $this->aiError = 'L\'analyse n\'a pas pu être générée. Vérifiez la configuration de l\'API Gemini ou réessayez.';
+        if (blank($result['text'])) {
+            $this->aiError = $result['user_error'];
         } else {
-            $this->aiAnalysis = trim($result);
+            $this->aiAnalysis = trim($result['text']);
         }
 
         $this->aiAnalyzing = false;

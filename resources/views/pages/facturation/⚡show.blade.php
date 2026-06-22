@@ -3,6 +3,7 @@
 use App\Models\facturation\Facturation;
 use App\Models\facturation\CashRegisterEvent;
 use App\Models\facturation\Payment;
+use App\Services\ConsultationBillingService;
 use App\Services\FinanceEventService;
 use Flux\Flux;
 use Illuminate\Support\Collection;
@@ -29,8 +30,8 @@ new #[Title('Detail facture')] class extends Component {
                 'dossierPatient',
                 'consultation.dossierPatient',
                 'consultation.departement',
-                'consultation.assurance',
-                'consultation.projet',
+                'consultation.projet.assurance.categorisation',
+                'consultation.assurance.categorisation',
                 'consultation.user',
                 'consultation.actes.departement',
                 'consultation.actes.service',
@@ -49,9 +50,73 @@ new #[Title('Detail facture')] class extends Component {
     }
 
     #[Computed]
+    public function assuranceCoverageRate(): float
+    {
+        $consultation = $this->facturation->consultation;
+
+        return $consultation
+            ? app(ConsultationBillingService::class)->defaultCoverageRate($consultation)
+            : 0.0;
+    }
+
+    #[Computed]
+    public function assuranceCategoryName(): string
+    {
+        $consultation = $this->facturation->consultation;
+
+        return $consultation
+            ? app(ConsultationBillingService::class)->coverageCategoryName($consultation)
+            : 'N/A';
+    }
+
+    #[Computed]
+    public function coverageLabel(): string
+    {
+        $consultation = $this->facturation->consultation;
+
+        return $consultation
+            ? app(ConsultationBillingService::class)->coverageLabel($consultation)
+            : 'Paiement direct';
+    }
+
+    #[Computed]
+    public function assuranceName(): string
+    {
+        $consultation = $this->facturation->consultation;
+
+        return $consultation
+            ? app(ConsultationBillingService::class)->assuranceName($consultation)
+            : 'Paiement direct';
+    }
+
+    #[Computed]
+    public function billingLines(): Collection
+    {
+        $consultation = $this->facturation->consultation;
+
+        if (! $consultation) {
+            return collect();
+        }
+
+        return app(ConsultationBillingService::class)->billingLines($consultation);
+    }
+
+    #[Computed]
+    public function grossAmount(): float
+    {
+        return (float) $this->billingLines->sum('amount');
+    }
+
+    #[Computed]
     public function totalAmount(): float
     {
-        return (float) $this->actes->sum(fn ($acte) => (float) ($acte->pivot->montant ?? 0));
+        return (float) $this->billingLines->sum('patient_amount');
+    }
+
+    #[Computed]
+    public function assuranceAmount(): float
+    {
+        return (float) $this->billingLines->sum('assurance_amount');
     }
 
     #[Computed]
@@ -322,8 +387,13 @@ new #[Title('Detail facture')] class extends Component {
 
                 <div class="rounded-2xl border border-white/70 bg-white/85 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
                     <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Prise en charge</p>
-                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white">{{ $facturation->consultation?->assurance?->name ?? 'Paiement direct' }}</p>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ $facturation->consultation?->projet?->name ?? 'Aucun projet' }}</p>
+                    <p class="mt-2 text-lg font-black text-slate-900 dark:text-white">{{ $this->coverageLabel() }}</p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        @if ($this->assuranceName() !== 'Paiement direct')
+                            {{ $this->assuranceName() }} —
+                        @endif
+                        {{ $this->assuranceCategoryName }} @if ($this->assuranceCoverageRate > 0)({{ number_format($this->assuranceCoverageRate, 0, ',', ' ') }}%)@endif
+                    </p>
                 </div>
 
                 <div class="rounded-2xl border border-white/70 bg-white/85 px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
@@ -337,13 +407,13 @@ new #[Title('Detail facture')] class extends Component {
 
     <section class="grid gap-4 sm:grid-cols-3">
         <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Montant total</p>
-            <p class="mt-3 text-3xl font-black text-slate-900 dark:text-white">{{ $this->money($this->totalAmount) }}</p>
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Montant brut</p>
+            <p class="mt-3 text-3xl font-black text-slate-900 dark:text-white">{{ $this->money($this->grossAmount) }}</p>
         </div>
 
         <div class="rounded-3xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/10">
-            <p class="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">Montant paye</p>
-            <p class="mt-3 text-3xl font-black text-emerald-900 dark:text-emerald-100">{{ $this->money($this->paidAmount) }}</p>
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">Part assurance</p>
+            <p class="mt-3 text-3xl font-black text-emerald-900 dark:text-emerald-100">{{ $this->money($this->assuranceAmount) }}</p>
         </div>
 
         <div class="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm dark:border-amber-500/20 dark:bg-amber-500/10">
@@ -357,7 +427,7 @@ new #[Title('Detail facture')] class extends Component {
             <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
                 <div>
                     <h2 class="text-lg font-black text-slate-900 dark:text-white">Actes factures</h2>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Liste detaillee des actes rattaches a cette facture.</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Liste detaillee des actes, categorie et prise en charge.</p>
                 </div>
             </div>
 
@@ -368,22 +438,28 @@ new #[Title('Detail facture')] class extends Component {
                             <th class="px-5 py-3">Acte</th>
                             <th class="px-5 py-3">Service</th>
                             <th class="px-5 py-3">Ref</th>
-                            <th class="px-5 py-3 text-right">Montant</th>
+                            <th class="px-5 py-3">Categorie</th>
+                            <th class="px-5 py-3 text-right">Brut</th>
+                            <th class="px-5 py-3 text-right">Assurance</th>
+                            <th class="px-5 py-3 text-right">Patient</th>
                             <th class="px-5 py-3 text-center">Paiement</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                        @forelse ($this->actes as $acte)
+                        @forelse ($this->billingLines as $line)
                             <tr>
                                 <td class="px-5 py-4">
-                                    <p class="font-semibold text-slate-900 dark:text-white">{{ $acte->name }}</p>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ $acte->departement?->name ?? 'Sans departement' }}</p>
+                                    <p class="font-semibold text-slate-900 dark:text-white">{{ $line['acte']->name }}</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ $line['acte']->departement?->name ?? 'Sans departement' }}</p>
                                 </td>
-                                <td class="px-5 py-4 text-slate-600 dark:text-slate-300">{{ $acte->service?->name ?? '-' }}</td>
-                                <td class="px-5 py-4 text-slate-600 dark:text-slate-300">{{ $acte->pivot->ref ?? '-' }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-slate-900 dark:text-white">{{ $this->money((float) ($acte->pivot->montant ?? 0)) }}</td>
+                                <td class="px-5 py-4 text-slate-600 dark:text-slate-300">{{ $line['acte']->service?->name ?? '-' }}</td>
+                                <td class="px-5 py-4 text-slate-600 dark:text-slate-300">{{ $line['acte']->pivot->ref ?? '-' }}</td>
+                                <td class="px-5 py-4 text-slate-600 dark:text-slate-300">{{ $this->assuranceCategoryName }} ({{ number_format((float) $line['coverage'], 0, ',', ' ') }}%)</td>
+                                <td class="px-5 py-4 text-right font-semibold text-slate-900 dark:text-white">{{ $this->money((float) $line['amount']) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-emerald-700 dark:text-emerald-300">{{ $this->money((float) $line['assurance_amount']) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-slate-900 dark:text-white">{{ $this->money((float) $line['patient_amount']) }}</td>
                                 <td class="px-5 py-4 text-center">
-                                    @if ($acte->pivot->payer ?? false)
+                                    @if ($line['acte']->pivot->payer ?? false)
                                         <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Paye</span>
                                     @else
                                         <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">En attente</span>
@@ -392,7 +468,7 @@ new #[Title('Detail facture')] class extends Component {
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400">
+                                <td colspan="8" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400">
                                     Aucun acte n'est encore rattache a cette facture.
                                 </td>
                             </tr>
@@ -407,12 +483,12 @@ new #[Title('Detail facture')] class extends Component {
                 <h2 class="text-lg font-black text-slate-900 dark:text-white">Resume financier</h2>
                 <div class="mt-5 space-y-4">
                     <div class="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <span class="text-sm text-slate-500 dark:text-slate-400">Total facture</span>
-                        <span class="font-bold text-slate-900 dark:text-white">{{ $this->money($this->totalAmount) }}</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">Total brut</span>
+                        <span class="font-bold text-slate-900 dark:text-white">{{ $this->money($this->grossAmount) }}</span>
                     </div>
                     <div class="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 dark:bg-emerald-500/10">
-                        <span class="text-sm text-emerald-700 dark:text-emerald-300">Total paye</span>
-                        <span class="font-bold text-emerald-900 dark:text-emerald-100">{{ $this->money($this->paidAmount) }}</span>
+                        <span class="text-sm text-emerald-700 dark:text-emerald-300">Part assurance</span>
+                        <span class="font-bold text-emerald-900 dark:text-emerald-100">{{ $this->money($this->assuranceAmount) }}</span>
                     </div>
                     <div class="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3 dark:bg-amber-500/10">
                         <span class="text-sm text-amber-700 dark:text-amber-300">Reste a payer</span>
@@ -438,7 +514,21 @@ new #[Title('Detail facture')] class extends Component {
                     </div>
                     <div class="flex items-start justify-between gap-4">
                         <dt class="text-slate-500 dark:text-slate-400">Prise en charge</dt>
-                        <dd class="font-semibold text-slate-900 dark:text-white">{{ $facturation->consultation?->assurance?->name ?? 'Paiement direct' }}</dd>
+                        <dd class="font-semibold text-slate-900 dark:text-white">
+                            @if ($facturation->consultation?->projet)
+                                {{ $facturation->consultation->projet->name }}
+                                @if ($this->assuranceName() !== 'Paiement direct')
+                                    <span class="block text-xs font-normal text-slate-500 dark:text-slate-400">
+                                        {{ $this->assuranceName() }} — {{ $this->assuranceCategoryName }} ({{ number_format($this->assuranceCoverageRate, 0, ',', ' ') }}%)
+                                    </span>
+                                @endif
+                            @else
+                                {{ $this->assuranceName() }}
+                                @if ($this->assuranceCoverageRate > 0)
+                                    — {{ $this->assuranceCategoryName }} ({{ number_format($this->assuranceCoverageRate, 0, ',', ' ') }}%)
+                                @endif
+                            @endif
+                        </dd>
                     </div>
                 </dl>
             </div>

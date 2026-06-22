@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ClinicalMessageController;
 use App\Http\Controllers\main\GroupeHopitauxController;
 use App\Http\Controllers\FacturationPdfController;
 use App\Http\Controllers\ImagerieBonPdfController;
@@ -14,6 +15,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 
+Route::middleware('signed')->prefix('messagerie/patient')->name('messaging.patient.')->group(function () {
+    Route::get('/piece/{attachment}', [ClinicalMessageController::class, 'downloadAttachment'])->name('attachment');
+    Route::get('/{message}', [ClinicalMessageController::class, 'showPatientMessage'])->name('show');
+});
+
 Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
     Route::livewire('/dashboard', 'pages::dashboard')->name('dashboard');
     Route::livewire('/profil', 'pages::profil')->name('profil');
@@ -23,6 +29,9 @@ Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
         Route::livewire('/services', 'pages::reception.services')->name('services');
     });
     Route::livewire('/analytics', 'pages::analytics')->name('analytics');
+    Route::livewire('/messagerie', 'pages::messaging.inbox')->name('messaging.inbox');
+    Route::get('/messagerie/piece-jointe/{attachment}', [ClinicalMessageController::class, 'downloadStaffAttachment'])
+        ->name('messaging.attachment.download');
     Route::get('/analytics/export/excel', [AnalyticsExportController::class, 'excel'])->name('analytics.export.excel');
     Route::get('/analytics/export/pdf', [AnalyticsExportController::class, 'pdf'])->name('analytics.export.pdf');
 
@@ -83,6 +92,7 @@ Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
     });
 
     Route::prefix('facturation')->name('facturation.')->group(function () {
+        Route::livewire('/dashboard', 'pages::facturation.dashboard')->name('dashboard');
         Route::livewire('/', 'pages::facturation.index')->name('index');
         Route::get('/show/{id}/pdf', FacturationPdfController::class)->name('pdf');
         Route::livewire('/documents', 'pages::facturation.documents_list')->name('documents');

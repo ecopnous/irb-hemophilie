@@ -393,4 +393,29 @@ class Consultation extends Model
             ->where('is_visite_program', true)
             ->orderBy('created_at');
     }
+
+    public function effectiveAssurance(): ?Assurance
+    {
+        $this->loadMissing(['projet.assurance.categorisation', 'assurance.categorisation']);
+
+        return $this->projet?->assurance ?? $this->assurance;
+    }
+
+    public function coverageRate(): float
+    {
+        return (float) ($this->effectiveAssurance()?->categorisation?->pourcentage ?? 0);
+    }
+
+    public function coverageCategoryName(): string
+    {
+        return (string) ($this->effectiveAssurance()?->categorisation?->name ?? 'N/A');
+    }
+
+    public function scopeForAssurance(Builder $query, int $assuranceId): Builder
+    {
+        return $query->where(function (Builder $inner) use ($assuranceId) {
+            $inner->where('assurance_id', $assuranceId)
+                ->orWhereHas('projet', fn (Builder $projetQuery) => $projetQuery->where('assurance_id', $assuranceId));
+        });
+    }
 }

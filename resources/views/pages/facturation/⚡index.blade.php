@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\facturation\Facturation;
+use App\Services\ConsultationBillingService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -41,7 +42,7 @@ new #[Title('Facturation et caisse'), Layout('layouts::app.other.facturation')] 
     private function baseQuery()
     {
         return Facturation::query()
-            ->with(['dossierPatient', 'consultation.dossierPatient', 'consultation.departement', 'consultation.assurance', 'consultation.actes'])
+            ->with(['dossierPatient', 'consultation.dossierPatient', 'consultation.departement', 'consultation.projet.assurance', 'consultation.actes'])
             ->whereHas('consultation', fn($q) => $q->whereHopitalId(current_hopital_id()))
             ->when($this->search !== '', function ($q) {
                 $term = '%' . $this->search . '%';
@@ -58,9 +59,12 @@ new #[Title('Facturation et caisse'), Layout('layouts::app.other.facturation')] 
 
     protected function billingSummary(Facturation $facturation): array
     {
-        $actes = $facturation->consultation?->actes ?? collect();
+        $consultation = $facturation->consultation;
+        $billing = app(ConsultationBillingService::class);
 
-        $total = (float) $actes->sum(fn($acte) => (float) ($acte->pivot->montant ?? 0));
+        $total = $consultation
+            ? $billing->totals($consultation)['patient']
+            : 0.0;
         $paid = (float) $facturation->payments()->whereNull('voided_at')->sum('amount');
 
         $status = match (true) {
@@ -274,7 +278,22 @@ new #[Title('Facturation et caisse'), Layout('layouts::app.other.facturation')] 
         @endinteract
 
         @interact('column_consultation_assurance_name', $row)
-            {{ data_get($row, 'consultation.assurance.name', 'Paiement direct') }}
+            @php
+                $consultation = $row->consultation ?? null;
+                $billing = $consultation ? app(\App\Services\ConsultationBillingService::class) : null;
+            @endphp
+            @if ($billing && $consultation)
+                <div class="space-y-1">
+                    <p class="font-semibold text-slate-900 dark:text-white">{{ $billing->coverageLabel($consultation) }}</p>
+                    @if ($billing->hasCoverage($consultation))
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            {{ $billing->assuranceName($consultation) }} ({{ number_format($billing->defaultCoverageRate($consultation), 0, ',', ' ') }}%)
+                        </p>
+                    @endif
+                </div>
+            @else
+                <span class="text-gray-400">Paiement direct</span>
+            @endif
         @endinteract
 
         @interact('column_montant_total', $row)

@@ -75,6 +75,10 @@ Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
             Route::livewire('/', 'pages::settings.hospitalisation.index')->name('index');
             Route::livewire('/show/{id}', 'pages::settings.hospitalisation.show')->name('show');
         });
+
+        Route::prefix('messagerie')->name('messagerie.')->group(function () {
+            Route::livewire('/modeles', 'pages::settings.messagerie.templates')->name('templates');
+        });
     });
 
     Route::prefix('groupe-hopital')->name('groupe_hopital.')->group(function () {

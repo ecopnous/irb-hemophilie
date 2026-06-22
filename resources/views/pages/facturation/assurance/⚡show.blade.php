@@ -69,8 +69,8 @@ new #[Title('Fiche facturation assurance'), Layout('layouts::app.other.facturati
     public function recentConsultations(): Collection
     {
         return Consultation::query()
-            ->with(['dossierPatient', 'projet', 'departement', 'actes'])
-            ->where('assurance_id', $this->assurance->id)
+            ->with(['dossierPatient', 'projet.assurance', 'departement', 'actes'])
+            ->forAssurance($this->assurance->id)
             ->whereHopitalId(current_hopital_id())
             ->whereBetween('created_at', [$this->period['start'], $this->period['end']])
             ->whereHas('actes')

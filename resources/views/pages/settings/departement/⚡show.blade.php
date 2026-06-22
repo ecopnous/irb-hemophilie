@@ -247,81 +247,91 @@ new #[Title('Département'), Layout('layouts::app.other.support_tech')] class ex
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <section
-            class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="flex items-center gap-3">
-                    <div
-                        class="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
-                        <flux:icon.user-circle class="size-5" />
-                    </div>
-                    <div>
-                        <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Responsable</p>
-                        <h2 class="text-lg font-black text-slate-900 dark:text-white">Chef de département</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div class="space-y-5 p-5">
-                @if ($this->chefAssigne)
-                    <div
-                        class="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-5 dark:border-emerald-500/25 dark:from-emerald-500/10 dark:to-slate-900/40">
-                        <div class="flex items-start gap-4">
-                            <div
-                                class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-sm font-black text-white">
-                                {{ $departement->chef->initials() }}
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                                    Chef assigné
-                                </p>
-                                <p class="mt-1 text-lg font-black text-slate-900 dark:text-white">
-                                    {{ $departement->chef->name }} {{ $departement->chef->prenom }}
-                                </p>
-                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                    {{ $departement->chef->departement?->name ?? 'Département non renseigné' }}
-                                </p>
-                            </div>
+        <div class="space-y-4">
+            <section
+                class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+                            <flux:icon.user-circle class="size-5" />
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Responsable</p>
+                            <h2 class="text-lg font-black text-slate-900 dark:text-white">Chef de département</h2>
                         </div>
                     </div>
-                @else
-                    <div
-                        class="rounded-2xl border border-dashed border-amber-300 bg-amber-50/50 p-5 text-center dark:border-amber-500/40 dark:bg-amber-500/5">
-                        <flux:icon.exclamation-triangle class="mx-auto size-8 text-amber-500" />
-                        <p class="mt-3 text-sm font-semibold text-amber-900 dark:text-amber-100">
-                            Aucun chef assigné
-                        </p>
-                        <p class="mt-1 text-xs text-amber-700/80 dark:text-amber-200/80">
-                            Recherchez un médecin pour diriger ce département.
-                        </p>
-                    </div>
-                @endif
+                </div>
 
-                <x-command-palette id="chef-departement-search" :request="[
-                    'url' => route('api.usersConnected'),
-                    'method' => 'get',
-                    'params' => [
-                        'search' => '',
-                        'hopital_id' => current_hopital_id(),
-                        'departement_id' => $departement->id,
-                    ],
-                ]" select="label:name|value:id|description:description|image:image"
-                    x-on:select="$wire.assignerChef($event.detail.id ?? $event.detail.value)"
-                    placeholder="Nom, matricule ou CNOM (min. 2 caractères)..." />
+                <div class="space-y-5 p-5">
+                    @if ($this->chefAssigne)
+                        <div
+                            class="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-5 dark:border-emerald-500/25 dark:from-emerald-500/10 dark:to-slate-900/40">
+                            <div class="flex items-start gap-4">
+                                <div
+                                    class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-sm font-black text-white">
+                                    {{ $departement->chef->initials() }}
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                                        Chef assigné
+                                    </p>
+                                    <p class="mt-1 text-lg font-black text-slate-900 dark:text-white">
+                                        {{ $departement->chef->name }} {{ $departement->chef->prenom }}
+                                    </p>
+                                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                        {{ $departement->chef->departement?->name ?? 'Département non renseigné' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <div
+                            class="rounded-2xl border border-dashed border-amber-300 bg-amber-50/50 p-5 text-center dark:border-amber-500/40 dark:bg-amber-500/5">
+                            <flux:icon.exclamation-triangle class="mx-auto size-8 text-amber-500" />
+                            <p class="mt-3 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                Aucun chef assigné
+                            </p>
+                            <p class="mt-1 text-xs text-amber-700/80 dark:text-amber-200/80">
+                                Recherchez un médecin pour diriger ce département.
+                            </p>
+                        </div>
+                    @endif
 
-                <flux:button class="w-full justify-center" variant="primary" icon="magnifying-glass" color="indigo"
-                    x-on:click="$tsui.open.commandPalette('chef-departement-search')">
-                    {{ $this->chefAssigne ? 'Changer de chef' : 'Rechercher un chef' }}
-                </flux:button>
+                    <x-command-palette id="chef-departement-search" :request="[
+                        'url' => route('api.usersConnected'),
+                        'method' => 'get',
+                        'params' => [
+                            'search' => '',
+                            'hopital_id' => current_hopital_id(),
+                            'departement_id' => $departement->id,
+                        ],
+                    ]" select="label:name|value:id|description:description|image:image"
+                        x-on:select="$wire.assignerChef($event.detail.id ?? $event.detail.value)"
+                        placeholder="Nom, matricule ou CNOM (min. 2 caractères)..." />
 
-                @if ($this->chefAssigne)
-                    <flux:button class="w-full justify-center" variant="ghost" icon="user-minus"
-                        wire:click="retirerChef">
-                        Retirer le chef
+                    <flux:button class="w-full justify-center" variant="primary" icon="magnifying-glass" color="indigo"
+                        x-on:click="$tsui.open.commandPalette('chef-departement-search')">
+                        {{ $this->chefAssigne ? 'Changer de chef' : 'Rechercher un chef' }}
                     </flux:button>
-                @endif
-            </div>
-        </section>
+
+                    @if ($this->chefAssigne)
+                        <flux:button class="w-full justify-center" variant="ghost" icon="user-minus"
+                            wire:click="retirerChef">
+                            Retirer le chef
+                        </flux:button>
+                    @endif
+                </div>
+            </section>
+            @if (filled($departement->description))
+                <section
+                    class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                    <p class="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Description</p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{{ $departement->description }}
+                    </p>
+                </section>
+            @endif
+        </div>
 
         <section
             class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
@@ -371,15 +381,6 @@ new #[Title('Département'), Layout('layouts::app.other.support_tech')] class ex
             </div>
         </section>
     </div>
-
-    @if (filled($departement->description))
-        <section
-            class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-            <p class="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Description</p>
-            <p class="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{{ $departement->description }}
-            </p>
-        </section>
-    @endif
 
     <x-modal id="departement-service-modal" title="Nouveau service" size="3xl" center persistent
         x-on:departement-service-saved.window="$tsui.close.modal('departement-service-modal')">

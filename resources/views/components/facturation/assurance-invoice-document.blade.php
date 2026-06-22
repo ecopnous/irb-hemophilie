@@ -91,6 +91,7 @@
                     <tr class="border-b-2 border-slate-300 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700">
                         <th class="px-3 py-3">Reference</th>
                         <th class="px-3 py-3">Actes</th>
+                        <th class="px-3 py-3">Categorie</th>
                         <th class="px-3 py-3">Departement</th>
                         <th class="px-3 py-3">Date</th>
                         <th class="px-3 py-3 text-right">Prix</th>
@@ -101,7 +102,7 @@
                 <tbody>
                     @forelse ($invoice['projets'] as $projet)
                         <tr class="bg-sky-50/80 dark:bg-sky-500/10">
-                            <td colspan="7" class="px-3 py-3 text-xs font-black uppercase tracking-[0.18em] text-sky-800 dark:text-sky-200">
+                            <td colspan="8" class="px-3 py-3 text-xs font-black uppercase tracking-[0.18em] text-sky-800 dark:text-sky-200">
                                 Projet : {{ $projet['name'] }}
                                 <span class="ml-2 font-mono text-[11px] font-semibold text-sky-600 dark:text-sky-300">{{ $projet['reference'] }}</span>
                                 <span class="float-right text-[11px] normal-case tracking-normal text-sky-700 dark:text-sky-300">
@@ -112,7 +113,7 @@
 
                         @foreach ($projet['patients'] as $patient)
                             <tr class="bg-slate-100/90 dark:bg-slate-900/70">
-                                <td colspan="4" class="px-3 py-2 font-bold uppercase text-slate-800 dark:text-slate-100">
+                                <td colspan="5" class="px-3 py-2 font-bold uppercase text-slate-800 dark:text-slate-100">
                                     N° {{ $patient['reference'] }} - {{ $patient['name'] }}
                                 </td>
                                 <td class="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">
@@ -128,6 +129,7 @@
                                 <tr class="border-b border-slate-100 dark:border-slate-800">
                                     <td class="px-3 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{{ $line['reference'] }}</td>
                                     <td class="px-3 py-2 text-slate-800 dark:text-slate-100">{{ $line['acte'] }}</td>
+                                    <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ $line['categorie'] ?? $meta['categorie'] }}</td>
                                     <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ $line['departement'] }}</td>
                                     <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{{ $line['date']->format('d M, Y') }}</td>
                                     <td class="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">{{ $money((float) $line['prix']) }}</td>
@@ -142,7 +144,7 @@
                         @endforeach
                     @empty
                         <tr>
-                            <td colspan="7" class="px-3 py-10 text-center text-slate-500 dark:text-slate-400">
+                            <td colspan="8" class="px-3 py-10 text-center text-slate-500 dark:text-slate-400">
                                 Aucune prestation facturable pour cette periode.
                             </td>
                         </tr>

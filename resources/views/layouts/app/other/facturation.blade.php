@@ -1,13 +1,13 @@
 <x-layouts::app.sidebar :title="$title ?? null" :back="true">
     <x-slot:navigation>
         <flux:sidebar.nav>
-            <flux:sidebar.item icon="receipt" href="{{ route('facturation.index') }}" wire:navigate>Factures
-                clinique
+            <flux:sidebar.item icon="chart-bar" href="{{ route('facturation.dashboard') }}" wire:navigate>Tableau de bord
             </flux:sidebar.item>
-            <flux:sidebar.item icon="file-chart-column" :href="route('facturation.assurance.index')" wire:navigate>Factures
-                assurance
+            <flux:sidebar.item icon="receipt" href="{{ route('facturation.index') }}" wire:navigate>Facturations clinique
             </flux:sidebar.item>
-            <flux:sidebar.item icon="receipt-text" href="{{ route('facturation.documents') }}" wire:navigate>Factures et devis
+            <flux:sidebar.item icon="file-chart-column" :href="route('facturation.assurance.index')" wire:navigate>Assurances
+            </flux:sidebar.item>
+            <flux:sidebar.item icon="receipt-text" href="{{ route('facturation.documents') }}" wire:navigate>Operation manuelle
             </flux:sidebar.item>
             <flux:sidebar.item icon="wallet" href="{{ route('facturation.payments') }}" wire:navigate>Historique des
                 paiements</flux:sidebar.item>

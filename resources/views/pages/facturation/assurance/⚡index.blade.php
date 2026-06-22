@@ -23,7 +23,10 @@ new #[Title('Factures assurance'), Layout('layouts::app.other.facturation')] cla
 
         $consultations = Consultation::query()
             ->whereHopitalId($hopitalId)
-            ->whereNotNull('assurance_id')
+            ->where(function ($query) {
+                $query->whereNotNull('assurance_id')
+                    ->orWhereHas('projet', fn ($projetQuery) => $projetQuery->whereNotNull('assurance_id'));
+            })
             ->whereBetween('created_at', [$start, $end])
             ->whereHas('actes')
             ->count();
@@ -31,7 +34,10 @@ new #[Title('Factures assurance'), Layout('layouts::app.other.facturation')] cla
         $montant = 0.0;
         Consultation::query()
             ->whereHopitalId($hopitalId)
-            ->whereNotNull('assurance_id')
+            ->where(function ($query) {
+                $query->whereNotNull('assurance_id')
+                    ->orWhereHas('projet', fn ($projetQuery) => $projetQuery->whereNotNull('assurance_id'));
+            })
             ->whereBetween('created_at', [$start, $end])
             ->whereHas('actes')
             ->with('actes')
@@ -46,10 +52,16 @@ new #[Title('Factures assurance'), Layout('layouts::app.other.facturation')] cla
             ->where(function ($query) {
                 $query->where('is_delete', false)->orWhereNull('is_delete');
             })
-            ->whereHas('consultations', function ($query) use ($hopitalId, $start, $end) {
-                $query->whereHopitalId($hopitalId)
-                    ->whereBetween('created_at', [$start, $end])
-                    ->whereHas('actes');
+            ->where(function ($query) use ($hopitalId, $start, $end) {
+                $query->whereHas('consultations', function ($consultationQuery) use ($hopitalId, $start, $end) {
+                    $consultationQuery->whereHopitalId($hopitalId)
+                        ->whereBetween('consultations.created_at', [$start, $end])
+                        ->whereHas('actes');
+                })->orWhereHas('projetConsultations', function ($consultationQuery) use ($hopitalId, $start, $end) {
+                    $consultationQuery->whereHopitalId($hopitalId)
+                        ->whereBetween('consultations.created_at', [$start, $end])
+                        ->whereHas('actes');
+                });
             })
             ->count();
 

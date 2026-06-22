@@ -35,10 +35,10 @@ final class AssuranceFacturationTable extends PowerGridComponent
             ->withCount([
                 'projets',
                 'patients',
-                'consultations' => fn ($query) => $query
+                'projetConsultations' => fn ($query) => $query
                     ->whereHopitalId(current_hopital_id())
-                    ->whereMonth('created_at', now()->month)
-                    ->whereYear('created_at', now()->year),
+                    ->whereMonth('consultations.created_at', now()->month)
+                    ->whereYear('consultations.created_at', now()->year),
             ])
             ->where(function (Builder $query) {
                 $query->where('is_delete', false)->orWhereNull('is_delete');

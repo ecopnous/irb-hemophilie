@@ -70,7 +70,8 @@
                 <flux:navbar.item icon="chart-column-big" href="{{ route('analytics') }}"
                     :current="request()->routeIs('analytics')" wire:navigate>Analytics</flux:navbar.item>
             @endif
-            <flux:navbar.item icon="envelope" badge="12" href="#">Boite de reception</flux:navbar.item>
+            <flux:navbar.item icon="envelope" :badge="clinical_inbox_unread_count() ?: null" href="{{ route('messaging.inbox') }}"
+                :current="request()->routeIs('messaging.inbox')" wire:navigate>Boite de reception</flux:navbar.item>
             <flux:navbar.item icon="document-text" href="#">Documents</flux:navbar.item>
         </flux:navbar>
 

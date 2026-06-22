@@ -41,3 +41,16 @@ if (!function_exists('nav_route_can')) {
         return \App\Support\GradeNavigation::canAccessRoute($routeName ?? request()->route()?->getName());
     }
 }
+
+if (!function_exists('clinical_inbox_unread_count')) {
+    function clinical_inbox_unread_count(): int
+    {
+        $user = auth()->user();
+
+        if ($user === null) {
+            return 0;
+        }
+
+        return app(\App\Services\ClinicalMessagingService::class)->unreadCountFor($user);
+    }
+}

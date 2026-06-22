@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\facturation\Facturation;
+use App\Services\ConsultationBillingService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\Response;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\View;
 
 class FacturationPdfController extends Controller
 {
-    public function __invoke(int $id): Response
+    public function __invoke(int $id, ConsultationBillingService $billing): Response
     {
         $facturation = Facturation::query()
             ->with([
@@ -18,8 +19,8 @@ class FacturationPdfController extends Controller
                 'payments' => fn ($query) => $query->whereNull('voided_at')->latest('paid_at'),
                 'consultation.dossierPatient',
                 'consultation.departement',
-                'consultation.assurance',
-                'consultation.projet',
+                'consultation.projet.assurance.categorisation',
+                'consultation.assurance.categorisation',
                 'consultation.user',
                 'consultation.actes.departement',
                 'consultation.actes.service',
@@ -31,8 +32,17 @@ class FacturationPdfController extends Controller
         $consultation = $facturation->consultation;
         $hopital = current_hopital();
 
-        $actes = $consultation?->actes ?? collect();
-        $totalHt = (float) $actes->sum(fn ($acte) => (float) ($acte->pivot->montant ?? 0));
+        $billingLines = $consultation
+            ? $billing->billingLines($consultation)
+            : collect();
+
+        $categoryName = $consultation
+            ? $billing->coverageCategoryName($consultation)
+            : 'N/A';
+
+        $grossAmount = (float) $billingLines->sum('amount');
+        $assuranceAmount = (float) $billingLines->sum('assurance_amount');
+        $totalHt = (float) $billingLines->sum('patient_amount');
         $tvaRate = 0.0;
         $tvaAmount = $totalHt * $tvaRate;
         $totalTtc = $totalHt + $tvaAmount;
@@ -44,7 +54,13 @@ class FacturationPdfController extends Controller
             'consultation' => $consultation,
             'patient' => $patient,
             'hopital' => $hopital,
-            'actes' => $actes,
+            'actes' => $consultation?->actes ?? collect(),
+            'billingLines' => $billingLines,
+            'categoryName' => $categoryName,
+            'assuranceName' => $consultation ? $billing->assuranceName($consultation) : 'Paiement direct',
+            'coverageRate' => $consultation ? $billing->defaultCoverageRate($consultation) : 0.0,
+            'grossAmount' => $grossAmount,
+            'assuranceAmount' => $assuranceAmount,
             'totalHt' => $totalHt,
             'totalTtc' => $totalTtc,
             'tvaRate' => $tvaRate,
