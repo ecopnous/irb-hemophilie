@@ -23,12 +23,28 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'sort_order' => 10,
             ],
             [
+                'key' => 'syndrome_thoracique_aigue',
+                'label' => 'Syndrome thoracique aigue',
+                'description' => 'Premiers signes cutanés.',
+                'value_type' => PremierSigneValueType::Age,
+                'value_label' => 'Âge',
+                'sort_order' => 20,
+            ],
+            [
+                'key' => 'splenomegalie',
+                'label' => 'Splenomegalie',
+                'description' => 'Premiers signes cutanés.',
+                'value_type' => PremierSigneValueType::Age,
+                'value_label' => 'Âge',
+                'sort_order' => 30,
+            ],
+            [
                 'key' => 'fievre',
                 'label' => 'Fièvre / infection',
                 'description' => 'Épisodes fébriles ou infectieux précoces.',
                 'value_type' => PremierSigneValueType::Age,
                 'value_label' => 'Âge',
-                'sort_order' => 20,
+                'sort_order' => 40,
             ],
             [
                 'key' => 'itere',
@@ -36,7 +52,7 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'description' => 'Apparition d\'un ictère néonatal ou infantile.',
                 'value_type' => PremierSigneValueType::Age,
                 'value_label' => 'Âge',
-                'sort_order' => 30,
+                'sort_order' => 50,
             ],
             [
                 'key' => 'cvo',
@@ -44,7 +60,7 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'description' => 'Complications vasculo-occlusives précoces.',
                 'value_type' => PremierSigneValueType::Age,
                 'value_label' => 'Âge',
-                'sort_order' => 40,
+                'sort_order' => 60,
             ],
             [
                 'key' => 'transfusion',
@@ -52,7 +68,7 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'description' => 'Âge de la première transfusion sanguine.',
                 'value_type' => PremierSigneValueType::Age,
                 'value_label' => 'Âge',
-                'sort_order' => 50,
+                'sort_order' => 70,
             ],
             [
                 'key' => 'nbr_transfusion',
@@ -60,7 +76,7 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'description' => 'Cumul des transfusions reçues.',
                 'value_type' => PremierSigneValueType::Quantity,
                 'value_label' => 'Nombre',
-                'sort_order' => 60,
+                'sort_order' => 80,
             ],
             [
                 'key' => 'episodes_epistaxis',
@@ -68,7 +84,7 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'description' => 'Premiers saignements nasaux rapportés.',
                 'value_type' => PremierSigneValueType::Age,
                 'value_label' => 'Âge',
-                'sort_order' => 70,
+                'sort_order' => 90,
             ],
             [
                 'key' => 'nbr_cvo_an',
@@ -76,7 +92,7 @@ class PremierSigneDefinitionSeeder extends Seeder
                 'description' => 'Fréquence annuelle des épisodes CVO.',
                 'value_type' => PremierSigneValueType::Quantity,
                 'value_label' => 'Nombre / an',
-                'sort_order' => 80,
+                'sort_order' => 100,
             ],
         ];
     }

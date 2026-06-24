@@ -2,7 +2,8 @@
     'title',
     'icon' => 'document-text',
     'incomplete' => false,
-    'incompleteMessage' => 'Informations incomplètes',
+    'description' => null,
+    'incompleteMessage' => null,
     'section' => null,
     'accent' => 'indigo',
 ])
@@ -17,6 +18,7 @@
         'emerald' => 'from-emerald-500/10 to-emerald-500/0 text-emerald-600 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-500/20',
     ];
     $accentClasses = $accentMap[$accent] ?? $accentMap['indigo'];
+    $sectionDescription = $description ?? $incompleteMessage ?? 'Informations de la section';
 @endphp
 
 <section
@@ -36,26 +38,35 @@
                     <h3 class="text-base font-black tracking-tight text-slate-900 dark:text-white">
                         {{ $title }}
                     </h3>
-                    @if ($incomplete)
-                        <p class="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                            <span class="size-2 rounded-full bg-amber-500"></span>
-                            {{ $incompleteMessage }}
-                        </p>
-                    @else
-                        <p class="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            Section complète
-                        </p>
-                    @endif
+                    <p @class([
+                        'mt-1 flex items-center gap-1.5 text-xs font-medium',
+                        'text-amber-700 dark:text-amber-300' => $incomplete,
+                        'text-emerald-700 dark:text-emerald-300' => ! $incomplete,
+                    ])>
+                        <span @class([
+                            'size-2 shrink-0 rounded-full',
+                            'bg-amber-500' => $incomplete,
+                            'bg-emerald-500' => ! $incomplete,
+                        ])></span>
+                        {{ $sectionDescription }}
+                    </p>
                 </div>
             </div>
 
-            @if ($section)
-                <flux:button size="sm" variant="ghost" icon="pencil-square"
-                    wire:click="openSection('{{ $section }}')"
-                    x-on:click="$tsui.open.modal('fiche-medicale-edit-modal')">
-                    Modifier
-                </flux:button>
-            @endif
+            <div class="flex flex-wrap items-center gap-2">
+                @if ($section)
+                    <flux:radio.group wire:model.live="sectionCompletionStatus.{{ $section }}" variant="segmented"
+                        size="sm">
+                        <flux:radio value="1">Complet</flux:radio>
+                        <flux:radio value="0">Incomplet</flux:radio>
+                    </flux:radio.group>
+                    <flux:button size="sm" variant="ghost" icon="pencil-square"
+                        wire:click="openSection('{{ $section }}')"
+                        x-on:click="$tsui.open.modal('fiche-medicale-edit-modal')">
+                        Modifier
+                    </flux:button>
+                @endif
+            </div>
         </div>
     </div>
 

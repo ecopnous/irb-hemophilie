@@ -65,6 +65,11 @@ Route::middleware(['auth', 'verified', 'grade.access'])->group(function () {
         Route::livewire('/profil/{id}/fiche-medicale', 'pages::patient.profil.fiche_medicale')->name('fiche_medicale');
         Route::livewire('/profil/{id}/boite-reception', 'pages::patient.profil.health_wallet')->name('inbox');
         Route::livewire('/profil/{id}/evolution', 'pages::patient.profil.evolution')->name('evolution');
+        Route::livewire('/profil/{id}/archivages', 'pages::patient.profil.archivages')->name('archivages');
+        Route::post('/profil/{id}/archivages/upload', [\App\Http\Controllers\PatientArchiveUploadController::class, 'store'])
+            ->name('archivages.upload');
+        Route::get('/profil/{id}/archivages/{document}/telecharger', [\App\Http\Controllers\PatientArchiveDocumentController::class, 'download'])
+            ->name('archivages.download');
     });
 
     Route::prefix('consultation')->name('consultation.')->group(function () {

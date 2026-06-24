@@ -29,17 +29,18 @@ class ClinicalExamFieldDefinitionSeeder extends Seeder
             ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'tanner_organe_genital', 'label' => 'Stade Tanner — Organe génital', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 80],
             ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'tanner_pilosite_pubienne', 'label' => 'Stade Tanner — Pilosité pubienne', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 90],
             ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'tanner_poitrine', 'label' => 'Stade Tanner — Poitrine (seins)', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 100],
-            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'volume_testicules', 'label' => 'Volume testicules', 'field_type' => ClinicalExamFieldType::Number, 'value_label' => 'ml', 'sort_order' => 110],
-            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'menstruations_douloureuses', 'label' => 'Menstruations douloureuses', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 120],
-            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'menstruations_irregulieres', 'label' => 'Menstruations irrégulières', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 130],
-            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'date_menarche', 'label' => 'Date ménarche', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 140],
+            // ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'volume_testicules', 'label' => 'Volume testicules', 'field_type' => ClinicalExamFieldType::Number, 'value_label' => 'ml', 'sort_order' => 110],
+            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'menstruations_douloureuses', 'label' => 'Menstruations douloureuses', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 110],
+            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'menstruations_irregulieres', 'label' => 'Menstruations irrégulières', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 120],
+            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'date_menarche', 'label' => 'Date ménarche', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 130],
+            ['section_key' => 'urogenital_maturation', 'section_label' => 'Urogénital & maturation sexuelle', 'key' => 'date_dernier_regles', 'label' => 'Date des derniers règles', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 140],
 
             // ORL & dentition
             ['section_key' => 'orl_dentition', 'section_label' => 'ORL & dentition', 'key' => 'orl_tonsilles', 'label' => 'Tonsilles hypertrophiques', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 150],
             ['section_key' => 'orl_dentition', 'section_label' => 'ORL & dentition', 'key' => 'orl_vegetations', 'label' => 'Végétations adénoïdiennes', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 160],
             ['section_key' => 'orl_dentition', 'section_label' => 'ORL & dentition', 'key' => 'orl_bouchons_auriculaires', 'label' => 'Bouchons auriculaires (g/d)', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 170],
             ['section_key' => 'orl_dentition', 'section_label' => 'ORL & dentition', 'key' => 'orl_caries_dentaires', 'label' => 'Caries dentaires', 'field_type' => ClinicalExamFieldType::Number, 'value_label' => 'nombre', 'sort_order' => 180],
-            ['section_key' => 'orl_dentition', 'section_label' => 'ORL & dentition', 'key' => 'orl_avulsion_dentaire', 'label' => 'Avulsion dentaire', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 190],
+            ['section_key' => 'orl_dentition', 'section_label' => 'ORL & dentition', 'key' => 'orl_avulsion_dentaire', 'label' => 'Avulsion dentaire', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 190],
 
             // Ophtalmologie
             ['section_key' => 'ophtalmologie', 'section_label' => 'Examen ophtalmologique', 'key' => 'ophtalmo_trouble_vue', 'label' => 'Trouble de la vue (myopie, astigmatisme…)', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 200],
@@ -53,11 +54,12 @@ class ClinicalExamFieldDefinitionSeeder extends Seeder
             ['section_key' => 'peau_phaneres', 'section_label' => 'Peau & phanères', 'key' => 'peau_abces', 'label' => 'Abcès', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 260],
             ['section_key' => 'peau_phaneres', 'section_label' => 'Peau & phanères', 'key' => 'peau_dermatite_pustules', 'label' => 'Dermatite / pustules', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 270],
             ['section_key' => 'peau_phaneres', 'section_label' => 'Peau & phanères', 'key' => 'peau_fistules', 'label' => 'Fistules', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 280],
+            ['section_key' => 'peau_phaneres', 'section_label' => 'Peau & phanères', 'key' => 'peau_autres', 'label' => 'Autres (Peau & phamères)', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 290],
 
             // Colonne & membres
-            ['section_key' => 'colonne_membres', 'section_label' => 'Colonne & membres (sup. et inf.)', 'key' => 'colonne_deviation', 'label' => 'Déviation (scoliose, gibbosité, cyphose…)', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 290],
-            ['section_key' => 'colonne_membres', 'section_label' => 'Colonne & membres (sup. et inf.)', 'key' => 'colonne_osteomyelite', 'label' => 'Ostéomyélite', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 300],
-            ['section_key' => 'colonne_membres', 'section_label' => 'Colonne & membres (sup. et inf.)', 'key' => 'colonne_genou_varum_valgum', 'label' => 'Genou varum / valgum', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 310],
+            ['section_key' => 'colonne_membres', 'section_label' => 'Colonne & membres (sup. et inf.)', 'key' => 'colonne_deviation', 'label' => 'Déviation (scoliose, gibbosité, cyphose…)', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 300],
+            ['section_key' => 'colonne_membres', 'section_label' => 'Colonne & membres (sup. et inf.)', 'key' => 'colonne_osteomyelite', 'label' => 'Ostéomyélite', 'field_type' => ClinicalExamFieldType::Boolean, 'sort_order' => 310],
+            ['section_key' => 'colonne_membres', 'section_label' => 'Colonne & membres (sup. et inf.)', 'key' => 'colonne_genou_varum_valgum', 'label' => 'Genou varum / valgum', 'field_type' => ClinicalExamFieldType::Text, 'sort_order' => 320],
         ];
     }
 

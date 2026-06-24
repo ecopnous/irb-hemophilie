@@ -43,6 +43,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
     public array $premierSignesForm = [];
     public $premier_signes_supplementaires;
 
+    public array $sectionCompletionStatus = [];
+
     public $antecedents_medicales, $antecedents_chirurgicaux, $antecedents_familiaux, $antecedents_obstetricaux, $antecedents_gynocola, $antecedents_neurologiques, $antecedents_cardiovasculaires, $antecedents_digestifs, $antecedents_endocrinologiques, $antecedents_hematologiques, $antecedents_supplementaires;
     public $tag_ids = [];
 
@@ -137,6 +139,65 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         $this->quartier = $this->patient->quartier;
         $this->avenue = $this->patient->avenue;
         $this->num_habitation = $this->patient->num_habitation;
+
+        $this->syncSectionCompletionStatus();
+    }
+
+    public function ficheSectionKeys(): array
+    {
+        return [
+            'demographiques',
+            'histoire_familiale',
+            'histoire_personnelle',
+            'histoire_maladie',
+            'autres_antecedents',
+            'localisation',
+        ];
+    }
+
+    protected function syncSectionCompletionStatus(): void
+    {
+        $stored = $this->patient->fiche_section_status ?? [];
+
+        foreach ($this->ficheSectionKeys() as $key) {
+            $this->sectionCompletionStatus[$key] = ($stored[$key] ?? false) ? 1 : 0;
+        }
+    }
+
+    public function sectionIsComplete(string $key): bool
+    {
+        return (bool) ($this->patient->fiche_section_status[$key] ?? false);
+    }
+
+    public function updated($property): void
+    {
+        if (! str_starts_with($property, 'sectionCompletionStatus.')) {
+            return;
+        }
+
+        $section = str_replace('sectionCompletionStatus.', '', $property);
+        $this->persistSectionStatus($section);
+    }
+
+    protected function persistSectionStatus(string $section): void
+    {
+        if (! in_array($section, $this->ficheSectionKeys(), true)) {
+            return;
+        }
+
+        $status = $this->patient->fiche_section_status ?? [];
+        $status[$section] = (bool) (int) ($this->sectionCompletionStatus[$section] ?? 0);
+
+        $this->patient->update(['fiche_section_status' => $status]);
+        $this->loadPatient($this->patient->id);
+    }
+
+    protected function sectionStatusPayloadFor(string $section): array
+    {
+        $status = $this->patient->fiche_section_status ?? [];
+        $status[$section] = (bool) (int) ($this->sectionCompletionStatus[$section] ?? 0);
+
+        return ['fiche_section_status' => $status];
     }
 
     public function openSection(string $section): void
@@ -178,7 +239,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'note' => 'nullable|string',
             ]);
 
-            $this->patient->update($validated);
+            $this->patient->update(array_merge($validated, $this->sectionStatusPayloadFor('demographiques')));
             $this->afterSectionSave('Les données démographiques ont été mises à jour.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs obligatoires.');
@@ -206,7 +267,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'histoire_famille_supplementaire' => 'nullable|string',
             ]);
 
-            $this->patient->update($validated);
+            $this->patient->update(array_merge($validated, $this->sectionStatusPayloadFor('histoire_familiale')));
             $this->afterSectionSave("L'histoire familiale a été mise à jour.");
         } catch (\Illuminate\Validation\ValidationException $e) {
             Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
@@ -228,7 +289,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'histoire_perso_supplementaire' => 'nullable|string',
             ]);
 
-            $this->patient->update($validated);
+            $this->patient->update(array_merge($validated, $this->sectionStatusPayloadFor('histoire_personnelle')));
             $this->afterSectionSave("L'histoire personnelle a été mise à jour.");
         } catch (\Illuminate\Validation\ValidationException $e) {
             Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
@@ -244,9 +305,9 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
             $service->sync($this->patient, $this->premierSignesForm);
 
-            $this->patient->update([
+            $this->patient->update(array_merge([
                 'premier_signes_supplementaires' => $this->premier_signes_supplementaires ?: null,
-            ]);
+            ], $this->sectionStatusPayloadFor('histoire_maladie')));
 
             $this->afterSectionSave("L'histoire de la maladie a été mise à jour.");
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -272,7 +333,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'antecedents_supplementaires' => 'nullable|string',
             ]);
 
-            $this->patient->update($validated);
+            $this->patient->update(array_merge($validated, $this->sectionStatusPayloadFor('autres_antecedents')));
             $this->afterSectionSave('Les antécédents ont été mis à jour.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
@@ -293,7 +354,7 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                 'adresses_supplementaires' => 'nullable|string',
             ]);
 
-            $this->patient->update($validated);
+            $this->patient->update(array_merge($validated, $this->sectionStatusPayloadFor('localisation')));
             $this->afterSectionSave('La localisation a été mise à jour.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             Flux::toast(variant: 'error', heading: 'Mise à jour échouée', text: 'Vérifiez les champs saisis.');
@@ -519,21 +580,6 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         ];
     }
 
-    public function isIncompleteDemographiques(): bool
-    {
-        return ! $this->isFilled($this->nom) || ! $this->isFilled($this->prenom) || ! $this->isFilled($this->genre) || ! $this->isFilled($this->date_naissance) || ! $this->isFilled($this->type_famille) || ! $this->isFilled($this->country_id);
-    }
-
-    public function isIncompleteHistoireFamiliale(): bool
-    {
-        return ! $this->isFilled($this->nom_pere) || ! $this->isFilled($this->province_pere) || ! $this->isFilled($this->nom_mere) || ! $this->isFilled($this->province_mere);
-    }
-
-    public function isIncompleteHistoirePersonnelle(): bool
-    {
-        return ! $this->isFilled($this->age_gestationnel) || ! $this->isFilled($this->allaitement_maternel) || ! $this->isFilled($this->med_traditionnel) || ! $this->isFilled($this->moringa_oleifera);
-    }
-
     public function premierSigneRows()
     {
         return app(PremierSigneService::class)->presentationRows($this->patient);
@@ -544,42 +590,15 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         return app(PremierSigneService::class)->progress($this->patient);
     }
 
-    public function isIncompleteHistoireMaladie(): bool
-    {
-        return app(PremierSigneService::class)->isIncomplete($this->patient);
-    }
-
-    public function isIncompleteAutresAntecedents(): bool
-    {
-        return ! $this->isAnyFilled([
-            $this->antecedents_medicales,
-            $this->antecedents_chirurgicaux,
-            $this->antecedents_familiaux,
-            $this->antecedents_obstetricaux,
-            $this->antecedents_gynocola,
-            $this->antecedents_neurologiques,
-            $this->antecedents_cardiovasculaires,
-            $this->antecedents_digestifs,
-            $this->antecedents_endocrinologiques,
-            $this->antecedents_hematologiques,
-            $this->antecedents_supplementaires,
-        ]);
-    }
-
-    public function isIncompleteLocalisation(): bool
-    {
-        return ! $this->isFilled($this->province_id) || ! $this->isFilled($this->ville_id) || ! $this->isFilled($this->commune_id) || ! $this->isFilled($this->quartier) || ! $this->isFilled($this->avenue) || ! $this->isFilled($this->num_habitation);
-    }
-
     public function completionSummary(): array
     {
         $sections = [
-            ['key' => 'demographiques', 'label' => 'Démographie', 'complete' => ! $this->isIncompleteDemographiques()],
-            ['key' => 'histoire_familiale', 'label' => 'Famille', 'complete' => ! $this->isIncompleteHistoireFamiliale()],
-            ['key' => 'histoire_personnelle', 'label' => 'Personnel', 'complete' => ! $this->isIncompleteHistoirePersonnelle()],
-            ['key' => 'histoire_maladie', 'label' => 'Maladie', 'complete' => ! $this->isIncompleteHistoireMaladie()],
-            ['key' => 'autres_antecedents', 'label' => 'Antécédents', 'complete' => ! $this->isIncompleteAutresAntecedents()],
-            ['key' => 'localisation', 'label' => 'Adresse', 'complete' => ! $this->isIncompleteLocalisation()],
+            ['key' => 'demographiques', 'label' => 'Démographie', 'complete' => $this->sectionIsComplete('demographiques')],
+            ['key' => 'histoire_familiale', 'label' => 'Famille', 'complete' => $this->sectionIsComplete('histoire_familiale')],
+            ['key' => 'histoire_personnelle', 'label' => 'Personnel', 'complete' => $this->sectionIsComplete('histoire_personnelle')],
+            ['key' => 'histoire_maladie', 'label' => 'Maladie', 'complete' => $this->sectionIsComplete('histoire_maladie')],
+            ['key' => 'autres_antecedents', 'label' => 'Antécédents', 'complete' => $this->sectionIsComplete('autres_antecedents')],
+            ['key' => 'localisation', 'label' => 'Adresse', 'complete' => $this->sectionIsComplete('localisation')],
         ];
 
         $completed = collect($sections)->where('complete', true)->count();
@@ -650,8 +669,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
 
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <x-patient.fiche-section title="Données démographiques" icon="identification" accent="indigo"
-            section="demographiques" :incomplete="$this->isIncompleteDemographiques()"
-            incomplete-message="Identité et données de naissance à compléter">
+            section="demographiques" :incomplete="! $this->sectionIsComplete('demographiques')"
+            description="Identité et données de naissance du patient">
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <x-patient.fiche-field label="Nom" :value="ucfirst((string) $nom)" :missing="!filled($nom)" />
                 <x-patient.fiche-field label="Post-nom" :value="$this->display($postnom)" />
@@ -676,8 +695,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         </x-patient.fiche-section>
 
         <x-patient.fiche-section title="Localisation actuelle" icon="map-pin" accent="emerald" section="localisation"
-            :incomplete="$this->isIncompleteLocalisation()"
-            incomplete-message="Adresse et localisation géographique incomplètes">
+            :incomplete="! $this->sectionIsComplete('localisation')"
+            description="Adresse et localisation géographique">
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <x-patient.fiche-field label="Province" :value="$patient->province?->name ?? '—'" :missing="!filled($province_id)" />
                 <x-patient.fiche-field label="Ville" :value="$patient->ville?->name ?? '—'" :missing="!filled($ville_id)" />
@@ -698,8 +717,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         </x-patient.fiche-section>
 
         <x-patient.fiche-section title="Histoire familiale" icon="users" accent="violet" section="histoire_familiale"
-            :incomplete="$this->isIncompleteHistoireFamiliale()"
-            incomplete-message="Informations sur les parents à compléter">
+            :incomplete="! $this->sectionIsComplete('histoire_familiale')"
+            description="Informations sur les parents et la fratrie">
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div class="space-y-4 rounded-2xl border border-slate-100 p-4 dark:border-slate-800">
                     <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-600 dark:text-violet-300">Père
@@ -740,8 +759,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         </x-patient.fiche-section>
 
         <x-patient.fiche-section title="Histoire personnelle" icon="heart" accent="sky"
-            section="histoire_personnelle" :incomplete="$this->isIncompleteHistoirePersonnelle()"
-            incomplete-message="Données de grossesse et de petite enfance incomplètes">
+            section="histoire_personnelle" :incomplete="! $this->sectionIsComplete('histoire_personnelle')"
+            description="Données de grossesse et de petite enfance">
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <x-patient.fiche-field label="Âge gestationnel" :value="filled($age_gestationnel) ? $age_gestationnel . ' sem/mois' : '—'" :missing="!filled($age_gestationnel)" />
                 <x-patient.fiche-field label="Allaitement maternel" :value="$this->displayBool($allaitement_maternel)" :missing="!filled($allaitement_maternel)" />
@@ -776,8 +795,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         </x-patient.fiche-section>
 
         <x-patient.fiche-section title="Histoire de la maladie" icon="presentation-chart-line" accent="rose"
-            section="histoire_maladie" :incomplete="$this->isIncompleteHistoireMaladie()"
-            :incomplete-message="'Complément progressif — ' . $this->premierSigneProgress()['answered'] . '/' . $this->premierSigneProgress()['total'] . ' références renseignées'"
+            section="histoire_maladie" :incomplete="! $this->sectionIsComplete('histoire_maladie')"
+            description="Premiers signes et évolution de la maladie"
             class="xl:col-span-2">
             <div
                 class="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-rose-100 bg-rose-50/60 px-4 py-3 dark:border-rose-500/20 dark:bg-rose-950/20">
@@ -806,8 +825,8 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
         </x-patient.fiche-section>
 
         <x-patient.fiche-section title="Autres antécédents" icon="clipboard-document-list" accent="amber"
-            section="autres_antecedents" :incomplete="$this->isIncompleteAutresAntecedents()"
-            incomplete-message="Aucun antécédent clinique renseigné" class="xl:col-span-2">
+            section="autres_antecedents" :incomplete="! $this->sectionIsComplete('autres_antecedents')"
+            description="Antécédents médicaux et chirurgicaux" class="xl:col-span-2">
             <div class="grid grid-cols-2 gap-3">
                 @foreach ($this->antecedentFields() as $field => $label)
                     @php($value = $this->{$field})
@@ -1009,6 +1028,10 @@ new #[Layout('layouts::app.other.profil_medical')] class extends Component {
                         label="Autres adresses supplémentaires" rows="4" maxlength="500" count />
                 @endif
             </div>
+
+            @if ($activeSection)
+                <x-patient.fiche-section-status-field :section="$activeSection" class="mt-4" />
+            @endif
         </div>
 
         <x-slot:footer>

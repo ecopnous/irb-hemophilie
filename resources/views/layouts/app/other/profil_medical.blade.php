@@ -1,5 +1,5 @@
 @php
-    $patientProfileId = $patient->id ?? request()->route('id');
+$patientProfileId = $patient->id ?? request()->route('id');
 @endphp
 
 <x-layouts::app.sidebar :title="$title ?? null" :back="true">
@@ -26,6 +26,11 @@
             <flux:sidebar.item icon="wallet" href="{{ route('consultation.facture', $patientProfileId) }}"
                 wire:navigate>
                 Historique des facturations
+            </flux:sidebar.item>
+            <flux:sidebar.item icon="archive-box-arrow-down"
+                href="{{ route('patient.archivages', $patientProfileId) }}"
+                :current="request()->routeIs('patient.archivages')" wire:navigate>
+                Archivages
             </flux:sidebar.item>
         </flux:sidebar.nav>
         <flux:sidebar.spacer />

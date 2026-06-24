@@ -37,6 +37,7 @@ class DossierPatient extends Model
 
         'poids_naissance',
         'note',
+        'fiche_section_status',
 
         'province_id',
         'ville_id',
@@ -95,6 +96,7 @@ class DossierPatient extends Model
 
     protected $casts = [
         'langues' => 'array',
+        'fiche_section_status' => 'array',
         'date_naissance' => 'date',
     ];
 
@@ -226,5 +228,10 @@ class DossierPatient extends Model
     public function premierSignes(): HasMany
     {
         return $this->hasMany(DossierPatientPremierSigne::class);
+    }
+
+    public function archiveDocuments(): HasMany
+    {
+        return $this->hasMany(PatientArchiveDocument::class, 'dossier_patient_id');
     }
 }
